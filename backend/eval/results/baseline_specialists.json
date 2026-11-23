@@ -1,0 +1,1191 @@
+{
+ "summary": {
+  "config": "baseline_specialists",
+  "n": 30,
+  "correct": 28,
+  "grounding_failures": 6,
+  "grounding_rejections": 13,
+  "grounding_false_positives": 2,
+  "json_parse_errors": 0,
+  "failures_real": 2,
+  "failures_noise": 0,
+  "causes": {
+   "misquoted_number": 1,
+   "tool": 1
+  },
+  "template_fallbacks": 13,
+  "routing_correct": 30,
+  "domo_calls_avg": 2.43,
+  "p50_s": 7.5,
+  "p95_s": 15.1,
+  "tokens_avg": 2184,
+  "settings": {
+   "use_router": false,
+   "use_cache": false,
+   "parallel": false,
+   "repair_retry": false,
+   "timeout_s": 60.0,
+   "specialists": true,
+   "classifier": true,
+   "reasoning": null,
+   "model": null,
+   "compact": false,
+   "few_shot": false,
+   "precomputed": false,
+   "grounding": "v1"
+  }
+ },
+ "rows": [
+  {
+   "qid": 1,
+   "q": "How many data quality issues were found in the latest upload?",
+   "note": "",
+   "expect": [
+    "data_reconciliation"
+   ],
+   "got": [
+    "data_reconciliation"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "The latest data upload (as of 2026-10-31, now 12 days old) flagged **12 data-quality issues** across both plants (IN-TN-01 and IN-KA-01). Key findings include: (1) **Snapshot continuity** \u2013 72 material \u00d7 warehouse series have zero day-to-day correlation, making trend analysis unusable (A1); (2) **Plant flip** \u2013 72 combinations appear under different plants on different days (A2); (3) **Safety stock mismatch** \u2013 all 72 snapshot rows differ from the material master (A5); (4) **PO status** \u2013 437 CLOSED PO lines received less than ordered, treated as short-closed (A8); (5) **Future receipts** \u2013 231 PO lines dated after 31-Oct-2026 carry received_qty worth \u20b9137.12 Cr across 18 materials, not counted as stock or supply (A9, A19); (6) **Supplier category** \u2013 1,155 of 1,300 PO lines are with suppliers whose approved category differs from the material's category, and 2 materials (AUDIO, CONNECTOR) have no approved supplier (A11); (7) **Broken link** \u2013 all 450 production orders reference non-existent customer orders (A16); (8) **Mixed UoM** \u2013 3 units (EA, KG, SET) are in use, so cross-material quantity totals are blocked and shown in INR only; and (9) **Stale data** \u2013 the data is 12 days old, exceeding the 1-day limit (A1). Additionally, no production orders start after the as-of date, so demand relies on the planning scenario (A15).",
+     "ungrounded": [
+      "7",
+      "8"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 8563,
+   "tokens": 2124,
+   "tools": [
+    "route:data_reconciliation",
+    "get_data_quality"
+   ],
+   "answer": "12 data-quality issues were found before calculation; data is 12 days old. Snapshot continuity (warning, 72); Plant flip (warning, 72); Safety stock mismatch (warning, 72); PO status (warning, 437); Future receipts (info, 231); Uncounted future receipts (info, 231); Supplier category (warning, 1155); Missing supplier (warning, 2); Broken link (warning, 450); Stale data (warning, 1); Mixed UoM (blocked, 3); Plan coverage (warning, 0).\n(assumptions A1, A2, A5, A8, A9, A11, A15, A16, A19)",
+   "llm_errors": []
+  },
+  {
+   "qid": 2,
+   "q": "How many CLOSED PO lines received less than ordered, according to the data checks?",
+   "note": "",
+   "expect": [
+    "data_reconciliation"
+   ],
+   "got": [
+    "data_reconciliation"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 6758,
+   "tokens": 1802,
+   "tools": [
+    "route:data_reconciliation",
+    "get_data_quality"
+   ],
+   "answer": "According to the PO status check (assumption A8), **all 437 of 437 CLOSED PO lines** received less than ordered. These are treated as short-closed, meaning nothing more is expected to be delivered against them. Note that the data is as of 2026-10-31 and is 12 days old.\n(assumptions A1, A2, A5, A8, A9, A11, A15, A16, A19)",
+   "llm_errors": []
+  },
+  {
+   "qid": 3,
+   "q": "How old is the data we are using?",
+   "note": "",
+   "expect": [
+    "data_reconciliation"
+   ],
+   "got": [
+    "data_reconciliation"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [
+    "137.12"
+   ],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7501,
+   "tokens": 1904,
+   "tools": [
+    "route:data_reconciliation",
+    "get_data_quality"
+   ],
+   "answer": "The data is **12 days old** as of 31-Oct-2026, which exceeds the freshness limit of 1 day \u2014 flagged by the **Stale data** check under assumption **A1**. In total, 12 data-quality checks fired across both plants (IN-TN-01 Chennai and IN-KA-01 Bengaluru). Key findings include: snapshot continuity issues affecting 72 material \u00d7 warehouse series (A1), 437 short-closed PO lines (A8), 231 future-dated PO lines worth \u20b9137.12 Cr not counted as stock or supply (A9, A19), and mixed units of measure (EA, KG, SET) blocking cross-material quantity totals. Given the data staleness, results should be treated with caution until a fresher data extract is available.",
+   "llm_errors": []
+  },
+  {
+   "qid": 4,
+   "q": "Which material is short in the next 7 days and how much cash is tied up in excess?",
+   "note": "two-specialist",
+   "expect": [
+    "shortage_forecast",
+    "excess_obsolete"
+   ],
+   "got": [
+    "shortage_forecast",
+    "excess_obsolete"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop+loop",
+   "domo_calls": 6,
+   "latency_ms": 23536,
+   "tokens": 7642,
+   "tools": [
+    "route:shortage_forecast+excess_obsolete",
+    "get_shortage_horizon",
+    "get_material_risk_ranking",
+    "get_excess_inventory"
+   ],
+   "answer": "In the next 7 days, **8 materials are critical and breach safety stock** (all on 2026-11-01): MAT-SOC-001, MAT-CAM-008, MAT-BOX-014, MAT-NAND-003, MAT-CON-013, MAT-DSP-005, MAT-SCR-016, and MAT-CAM-007 across plants IN-TN-01 and IN-KA-01, with MAT-SOC-001 being the most impacted (0 usable stock, 180 orders affected). Regarding cash tied up in excess inventory, MAT-SOC-001 at IN-KA-01 has 1,357 EA above its max stock level, tying up \u20b957,00,450. Additionally, \u20b910,73,39,400 is locked in materials with no demand basis \u2014 MAT-PASTE-017 (IN-TN-01: \u20b95,71,51,600; IN-KA-01: \u20b92,38,14,200) and MAT-ADH-018 (IN-TN-01: \u20b92,63,73,600). These findings rely on assumptions A1\u2013A11, A14, A15, A17\u2013A21.",
+   "llm_errors": []
+  },
+  {
+   "qid": 5,
+   "q": "How healthy is our inventory overall?",
+   "note": "",
+   "expect": [
+    "stock_monitoring"
+   ],
+   "got": [
+    "stock_monitoring"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario (run 41, as of 2026-10-31), overall inventory health is **12.5%** across both plants (IN-TN-01 Chennai and IN-KA-01 Bengaluru). Out of 36 material-plant pairs, 11 are **critical**, 16 are **at risk**, 1 is **excess**, 4 are **healthy**, and 4 are **stale**. On-hand inventory value is \u20b936.80 crore, of which usable stock is \u20b927.61 crore; 8 pairs are expected to go critical within 7 days, 270 orders are at risk, and 673 PO lines are overdue. Key assumptions: A1\u2013A11, A14, A15, A17\u2013A21.",
+     "ungrounded": [
+      "2026-10-31",
+      "41"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [
+    "11"
+   ],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 3,
+   "latency_ms": 9185,
+   "tokens": 2119,
+   "tools": [
+    "route:stock_monitoring",
+    "get_inventory_overview"
+   ],
+   "answer": "Across IN-KA-01, IN-TN-01: 11 critical, 16 at risk, 1 excess, 4 healthy and 4 without a demand basis (inventory health 12.5%). On-hand value \u20b936.80 Cr; 8 pairs go below safety stock within 7 days; 270 planned orders start after a stock-out. Excess \u20b957.00 lakh; 0 proposals (\u20b90) wait for approval; 673 PO lines are overdue. On your production orders, all 32 material \u00d7 plant pairs with demand are short (open orders need a median 19.2\u00d7 current usable stock, range 7.9\u201361.0\u00d7); proposals use the planning scenario (A21).\n(assumptions A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A14, A15, A17, A18, A19, A20, A21)",
+   "llm_errors": []
+  },
+  {
+   "qid": 6,
+   "q": "What is the total value of our inventory on hand?",
+   "note": "",
+   "expect": [
+    "stock_monitoring"
+   ],
+   "got": [
+    "stock_monitoring"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario (as of 2026-10-31, run 41), the total on-hand inventory value across both plants (IN-TN-01 Chennai and IN-KA-01 Bengaluru) is \u20b936,79,83,279 (approximately \u20b936.80 crore). Of this, the usable inventory value is \u20b927,60,96,562 (approximately \u20b927.61 crore). These figures rely on assumptions A1\u2013A11, A14, A15, A17\u2013A21.",
+     "ungrounded": [
+      "2026-10-31",
+      "41"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [
+    "11"
+   ],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 6041,
+   "tokens": 1518,
+   "tools": [
+    "route:stock_monitoring",
+    "get_inventory_overview"
+   ],
+   "answer": "Across IN-KA-01, IN-TN-01: 11 critical, 16 at risk, 1 excess, 4 healthy and 4 without a demand basis (inventory health 12.5%). On-hand value \u20b936.80 Cr; 8 pairs go below safety stock within 7 days; 270 planned orders start after a stock-out. Excess \u20b957.00 lakh; 0 proposals (\u20b90) wait for approval; 673 PO lines are overdue. On your production orders, all 32 material \u00d7 plant pairs with demand are short (open orders need a median 19.2\u00d7 current usable stock, range 7.9\u201361.0\u00d7); proposals use the planning scenario (A21).\n(assumptions A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A14, A15, A17, A18, A19, A20, A21)",
+   "llm_errors": []
+  },
+  {
+   "qid": 7,
+   "q": "What is the usable stock of MAT-SOC-001 at IN-KA-01?",
+   "note": "",
+   "expect": [
+    "stock_monitoring"
+   ],
+   "got": [
+    "stock_monitoring"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 6944,
+   "tokens": 1469,
+   "tools": [
+    "route:stock_monitoring",
+    "get_stock_position"
+   ],
+   "answer": "Based on the planning scenario, the usable stock of MAT-SOC-001 (Application Processor SoC) at IN-KA-01 is **15,211 EA**, valued at \u20b96,38,86,200. The material currently has an 'excess' status with 50.5 days of cover, a safety stock of 1,643 EA, and a max level of 13,854 EA. No shortage or stock-out date is projected. Key assumptions: A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A14, A15, A18, A19, A20.",
+   "llm_errors": []
+  },
+  {
+   "qid": 8,
+   "q": "What is the safety stock of MAT-BAT-006 at IN-TN-01?",
+   "note": "",
+   "expect": [
+    "stock_monitoring"
+   ],
+   "got": [
+    "stock_monitoring"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 6522,
+   "tokens": 1435,
+   "tools": [
+    "route:stock_monitoring",
+    "get_stock_position"
+   ],
+   "answer": "The safety stock of MAT-BAT-006 (5000mAh Li-ion Battery) at IN-TN-01 is **2,128 EA**, based on the planning scenario. The material currently has a usable stock of 8,342 EA with 27.7 days of cover and is flagged as **at_risk**, with a projected shortage date of 2026-12-21. Key assumptions: A1, A2, A10, A19.",
+   "llm_errors": []
+  },
+  {
+   "qid": 9,
+   "q": "Give me today's brief.",
+   "note": "",
+   "expect": [
+    "stock_monitoring"
+   ],
+   "got": [
+    "stock_monitoring"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [
+    "11"
+   ],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 9224,
+   "tokens": 1878,
+   "tools": [
+    "route:stock_monitoring",
+    "get_daily_brief"
+   ],
+   "answer": "Based on the planning scenario (assumptions A1, A10, A13, A14, A15, A19, A20), here is today's brief as of 2026-10-31 (Run 41 \u2014 **data is 12 days stale**):\n\n**Inventory health is at 12.5%** with 11 critical, 16 at-risk, 4 healthy, 1 excess, and 4 stale materials. There are **270 production orders at risk** (42 within 14 days). Top critical items include MAT-BOX-014 at IN-TN-01 (stockout 2026-11-23, 114 orders affected, 1 day to shortage), MAT-CAM-007 at IN-KA-01 (stockout 2026-12-10, 63 orders affected), and MAT-CAM-008 at IN-TN-01 (stockout 2026-11-23, 114 orders affected). There are **673 overdue PO lines** out of 863 open, excess inventory valued at \u20b957,00,450, and **28 draft proposals** worth \u20b912,00,07,394 pending review. Additionally, 32 production-order/material pairs are flagged with usable stock covering only 7.9%\u201361% of requirements (median 19.2%), and 12 data-quality issues need attention.",
+   "llm_errors": []
+  },
+  {
+   "qid": 10,
+   "q": "How many materials are critical, at risk, excess and healthy?",
+   "note": "",
+   "expect": [
+    "stock_monitoring"
+   ],
+   "got": [
+    "stock_monitoring"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario (as of 2026-10-31, run 41) across both plants (IN-KA-01 and IN-TN-01), out of 36 material-plant pairs: **11 are critical**, **16 are at risk**, **1 is excess**, and **4 are healthy** (with 4 additional marked as stale). Overall inventory health is just 12.5%. These figures rely on assumptions A1\u2013A11, A14, A15, A17\u2013A21.",
+     "ungrounded": [
+      "2026-10-31",
+      "41"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [
+    "11"
+   ],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 6912,
+   "tokens": 1510,
+   "tools": [
+    "route:stock_monitoring",
+    "get_inventory_overview"
+   ],
+   "answer": "Across IN-KA-01, IN-TN-01: 11 critical, 16 at risk, 1 excess, 4 healthy and 4 without a demand basis (inventory health 12.5%). On-hand value \u20b936.80 Cr; 8 pairs go below safety stock within 7 days; 270 planned orders start after a stock-out. Excess \u20b957.00 lakh; 0 proposals (\u20b90) wait for approval; 673 PO lines are overdue. On your production orders, all 32 material \u00d7 plant pairs with demand are short (open orders need a median 19.2\u00d7 current usable stock, range 7.9\u201361.0\u00d7); proposals use the planning scenario (A21).\n(assumptions A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A14, A15, A17, A18, A19, A20, A21)",
+   "llm_errors": []
+  },
+  {
+   "qid": 11,
+   "q": "When does MAT-PCB-004 at IN-KA-01 go below safety stock?",
+   "note": "",
+   "expect": [
+    "stock_monitoring"
+   ],
+   "got": [
+    "stock_monitoring"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7124,
+   "tokens": 1472,
+   "tools": [
+    "route:stock_monitoring",
+    "get_stock_position"
+   ],
+   "answer": "Based on the planning scenario, MAT-PCB-004 (6-layer Main PCB) at IN-KA-01 is projected to drop below its safety stock of 1,267 EA on **2026-11-27** (shortage date), with a full stock-out expected by 2026-12-01. Currently, usable stock stands at 2,098 EA with only 7.0 days of cover and 576 EA in transit. There are open POs totalling 6,507 EA, but the lead time is 23 days (source: actual). Key assumptions: A1, A2, A10, A19.",
+   "llm_errors": []
+  },
+  {
+   "qid": 12,
+   "q": "Will any line stop because of a material?",
+   "note": "",
+   "expect": [
+    "shortage_forecast"
+   ],
+   "got": [
+    "shortage_forecast"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": false,
+   "missing": [
+    [
+     "int",
+     22
+    ]
+   ],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": "misquoted_number",
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 4,
+   "latency_ms": 13744,
+   "tokens": 4036,
+   "tools": [
+    "route:shortage_forecast",
+    "get_shortage_horizon",
+    "get_shortage_horizon"
+   ],
+   "answer": "Yes \u2014 based on the planning scenario, 11 material \u00d7 plant pairs will breach safety stock within 30 days, and all 11 are heading for stock-out. The most urgent line-stop risk is **MAT-SOC-001 at IN-TN-01**, which has zero usable stock and stocks out today (2026-11-01), affecting 180 production orders. **MAT-CAM-008 at IN-TN-01** is also at zero usable stock, stocking out by 2026-11-23 and impacting 114 orders. Other critical materials include MAT-BOX-014 (IN-TN-01, 114 orders), MAT-NAND-003 (IN-TN-01, 108 orders), MAT-CON-013 (IN-TN-01, 84 orders), MAT-DSP-005 (IN-KA-01, 75 orders), MAT-SCR-016 (IN-TN-01, 69 orders), and MAT-CAM-007 (IN-KA-01, 63 orders), plus 3 more not shown. Key assumptions are A1\u2013A11, A14, A15, A18\u2013A21. I cannot approve or release any actions \u2014 please review with your planning team.",
+   "llm_errors": [],
+   "reruns": [
+    {
+     "correct": false,
+     "cause": "misquoted_number",
+     "status": "ok",
+     "answer": "Yes \u2014 based on the planning scenario, 11 material \u00d7 plant pairs will breach safety stock within 30 days, and all 11 are heading for stock-out. The most urgent line-stop risk is **MAT-SOC-001 at IN-TN-01**, which has zero usable stock and stocks out today (2026-11-01), affecting 180 production orders. **MAT-CAM-008 at IN-TN-01** is also at zero usable stock, stocking out by 2026-11-23 and impacting 114 orders. Other critical materials include MAT-BOX-014 (IN-TN-01, 114 orders), MAT-NAND-003 (IN-TN-01, 108 orders), MAT-CON-013 (IN-TN-01, 84 orders), MAT-DSP-005 (IN-KA-01, 75 orders), MAT-SCR-016 (IN-TN-01, 69 orders), and MAT-CAM-007 (IN-KA-01, 63 orders), plus 3 more not shown. Key assumptions are A1\u2013A11, A14, A15, A18\u2013A21. I cannot approve or release any actions \u2014 please review with your planning team."
+    },
+    {
+     "correct": false,
+     "cause": "misquoted_number",
+     "status": "ok",
+     "answer": "Yes \u2014 based on the planning scenario, 11 material \u00d7 plant pairs will breach safety stock within 30 days, and all 11 are headed for stock-out. The most urgent line-stop risk is **MAT-SOC-001 at IN-TN-01**, which has zero usable stock and stocks out today (2026-11-01), affecting 180 production orders. **MAT-CAM-008 at IN-TN-01** is also at zero usable stock, stocking out by 2026-11-23 and impacting 114 orders. Other critical materials include MAT-BOX-014 (IN-TN-01, 114 orders), MAT-NAND-003 (IN-TN-01, 108 orders), MAT-CON-013 (IN-TN-01, 84 orders), MAT-DSP-005 (IN-KA-01, 75 orders), MAT-SCR-016 (IN-TN-01, 69 orders), and MAT-CAM-007 (IN-KA-01, 63 orders), plus 3 more not shown. Key assumptions are A1\u2013A11, A14, A15, A18\u2013A21. I cannot approve or release any actions \u2014 please review proposals with your planning team."
+    }
+   ],
+   "failure": "real"
+  },
+  {
+   "qid": 13,
+   "q": "Which materials go below safety stock in the next 7 days?",
+   "note": "",
+   "expect": [
+    "shortage_forecast"
+   ],
+   "got": [
+    "shortage_forecast"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 9859,
+   "tokens": 2657,
+   "tools": [
+    "route:shortage_forecast",
+    "get_shortage_horizon"
+   ],
+   "answer": "Based on the planning scenario, **8 materials** (all critical) drop below safety stock within the next 7 days \u2014 every one of them breaches tomorrow (2026-11-01):\n\n1. **MAT-SOC-001** at IN-TN-01 \u2014 0 usable vs. 1,643 SS, stocks out 2026-11-01, 180 orders affected, short 14,315 EA\n2. **MAT-CAM-008** at IN-TN-01 \u2014 0 usable vs. 4,179 SS, stocks out 2026-11-23, 114 orders affected, short 15,612 EA\n3. **MAT-BOX-014** at IN-TN-01 \u2014 2,540 usable vs. 3,317 SS, stocks out 2026-11-23, 114 orders affected, short 14,570 EA\n4. **MAT-NAND-003** at IN-TN-01 \u2014 2,693 usable vs. 3,956 SS, stocks out 2026-11-25, 108 orders affected, short 14,806 EA\n5. **MAT-CON-013** at IN-TN-01 \u2014 2,955 usable vs. 3,612 SS, stocks out 2026-12-03, 84 orders affected, short 11,973 EA\n6. **MAT-DSP-005** at IN-KA-01 \u2014 3,791 usable vs. 4,639 SS, stocks out 2026-12-06, 75 orders affected, short 12,079 EA\n7. **MAT-SCR-016** at IN-TN-01 \u2014 2,888 usable vs. 4,892 SS, stocks out 2026-12-08, 69 orders affected, short 11,683 SET\n8. **MAT-CAM-007** at IN-KA-01 \u2014 2,787 usable vs. 4,964 SS, stocks out 2026-12-10, 63 orders affected, short 11,142 EA\n\nMAT-SOC-001 at IN-TN-01 is the most urgent (same-day stock-out, most orders impacted). Key assumptions: A1\u2013A11, A14, A15, A18\u2013A21.",
+   "llm_errors": []
+  },
+  {
+   "qid": 14,
+   "q": "What are the 5 riskiest materials right now?",
+   "note": "",
+   "expect": [
+    "shortage_forecast"
+   ],
+   "got": [
+    "shortage_forecast"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 8523,
+   "tokens": 2008,
+   "tools": [
+    "route:shortage_forecast",
+    "get_material_risk_ranking"
+   ],
+   "answer": "Based on the planning scenario (assumptions A1\u2013A11, A14, A15, A18\u2013A20), the 5 riskiest materials \u2014 all critical and at plant IN-TN-01 \u2014 are:\n\n1. **MAT-SOC-001** \u2013 usable stock 0 EA vs. safety stock 1,643; shortage of 14,315 EA starting 2026-11-01 (stock-out same day); 180 orders affected; 20-day lead time.\n2. **MAT-CAM-008** \u2013 usable stock 0 EA vs. safety stock 4,179; shortage of 15,612 EA starting 2026-11-01 (stock-out 2026-11-23); 114 orders affected; 24-day lead time.\n3. **MAT-BOX-014** \u2013 usable stock 2,540 EA vs. safety stock 3,317; shortage of 14,570 EA starting 2026-11-01 (stock-out 2026-11-23); 114 orders affected; 18-day lead time.\n4. **MAT-NAND-003** \u2013 usable stock 2,693 EA vs. safety stock 3,956; shortage of 14,806 EA starting 2026-11-01 (stock-out 2026-11-25); 108 orders affected; 23-day lead time.\n5. **MAT-CON-013** \u2013 usable stock 2,955 EA vs. safety stock 3,612; shortage of 11,973 EA starting 2026-11-01 (stock-out 2026-12-03); 84 orders affected; 7-day lead time.\n\nMAT-SOC-001 is the most urgent with zero stock and the highest order impact (180 orders). Immediate expediting or inter-plant transfers should be evaluated for all five.",
+   "llm_errors": []
+  },
+  {
+   "qid": 15,
+   "q": "How many material x plant pairs are short within 30 days?",
+   "note": "",
+   "expect": [
+    "shortage_forecast"
+   ],
+   "got": [
+    "shortage_forecast"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario, there are **11 material \u00d7 plant pairs** forecast to go below safety stock within the next 30 days (as of 2026-10-31, run 41). Of these, 10 are critical and 1 is at-risk, and all 11 are projected to stock out. The most urgent include MAT-SOC-001 at IN-TN-01 (already at zero usable stock, stocking out 2026-11-01, 180 orders affected), MAT-CAM-008 at IN-TN-01 (also zero usable, 114 orders affected), and MAT-BOX-014 at IN-TN-01 (114 orders affected). Key assumptions underpinning this forecast are A1\u2013A11, A14, A15, A18\u2013A21.",
+     "ungrounded": [
+      "2026-10-31",
+      "41"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [
+    "10"
+   ],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7313,
+   "tokens": 2273,
+   "tools": [
+    "route:shortage_forecast",
+    "get_shortage_horizon"
+   ],
+   "answer": "11 pairs go below safety stock within 30 days (10 critical, 1 at risk); 11 of them reach a stock-out, where the line would stop. First: MAT-BOX-014 at IN-TN-01 \u2014 critical, below SS on 01-Nov-2026, stock-out 23-Nov-2026 (114 orders); MAT-CAM-007 at IN-KA-01 \u2014 critical, below SS on 01-Nov-2026, stock-out 10-Dec-2026 (63 orders); MAT-CAM-008 at IN-TN-01 \u2014 critical, below SS on 01-Nov-2026, stock-out 23-Nov-2026 (114 orders); MAT-CON-013 at IN-TN-01 \u2014 critical, below SS on 01-Nov-2026, stock-out 03-Dec-2026 (84 orders); MAT-DSP-005 at IN-KA-01 \u2014 critical, below SS on 01-Nov-2026, stock-out 06-Dec-2026 (75 orders). On your production orders, all 32 material \u00d7 plant pairs with demand are short (open orders need a median 19.2\u00d7 current usable stock, range 7.9\u201361.0\u00d7); proposals use the planning scenario (A21).\n(assumptions A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A14, A15, A18, A19, A20, A21)",
+   "llm_errors": []
+  },
+  {
+   "qid": 16,
+   "q": "Which pair stocks out first, and how many production orders does it affect?",
+   "note": "",
+   "expect": [
+    "shortage_forecast"
+   ],
+   "got": [
+    "shortage_forecast"
+   ],
+   "routing": "classifier",
+   "facts_in_tools": false,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": false,
+   "missing": [
+    [
+     "id",
+     "MAT-SOC-001"
+    ],
+    [
+     "int",
+     180
+    ]
+   ],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": "tool",
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 5,
+   "latency_ms": 13476,
+   "tokens": 3264,
+   "tools": [
+    "route:shortage_forecast",
+    "get_shortage_horizon",
+    "get_shortage_horizon"
+   ],
+   "answer": "Based on the planning scenario (assumptions A14, A21), no material \u00d7 plant pair is projected to stock out within the next 60 days across both IN-TN-01 Chennai and IN-KA-01 Bengaluru. Therefore, zero production orders are affected by a stock-out in this horizon. Note that 32 pairs are flagged as critical relative to their production-order requirements, so while usable stock still covers demand, you may want to monitor those pairs closely.",
+   "llm_errors": [],
+   "reruns": [
+    {
+     "correct": false,
+     "cause": "tool",
+     "status": "ok",
+     "answer": "Based on the planning scenario (assumptions A14, A21), no material \u00d7 plant pair is projected to stock out within the next 60 days across both IN-TN-01 Chennai and IN-KA-01 Bengaluru. Therefore, zero production orders are affected by a stock-out in this horizon. Note that 32 pairs are flagged as critical, so while they are under pressure, none currently cross the stock-out threshold within the forecast window."
+    },
+    {
+     "correct": false,
+     "cause": "tool",
+     "status": "ok",
+     "answer": "Based on the planning scenario (assumptions A14, A21), no material \u00d7 plant pair is projected to stock out within the next 60 days across both IN-TN-01 Chennai and IN-KA-01 Bengaluru. Therefore, zero production orders are affected by a stock-out in this horizon. Note that 32 pairs are flagged as critical, so while they are under pressure, none currently cross the stock-out threshold within the forecast window."
+    }
+   ],
+   "failure": "real"
+  },
+  {
+   "qid": 17,
+   "q": "What is waiting for my approval, and why?",
+   "note": "",
+   "expect": [
+    "replenishment"
+   ],
+   "got": [
+    "replenishment"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario (run 41, as of 2026-10-31), there are currently **no proposals waiting for your approval** \u2014 the count in both the pending-buyer and pending-manager queues is 0 (\u20b90). However, there are **28 draft proposals** with a total value of \u20b912,00,07,394 that have not yet been submitted into the approval workflow. Once any of those drafts are released, they will appear in the pending queue for review. I cannot approve or release anything on your behalf.",
+     "ungrounded": [
+      "2026-10-31",
+      "41"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7761,
+   "tokens": 1142,
+   "tools": [
+    "route:replenishment",
+    "get_proposal_details"
+   ],
+   "answer": "Nothing is waiting for your approval. 28 draft proposals (\u20b912.00 Cr) have not been submitted yet.\n(based on the planning scenario (A15))",
+   "llm_errors": []
+  },
+  {
+   "qid": 18,
+   "q": "How much MAT-SOC-001 should we order for IN-TN-01?",
+   "note": "",
+   "expect": [
+    "replenishment"
+   ],
+   "got": [
+    "replenishment"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario, MAT-SOC-001 at IN-TN-01 has a projected shortfall of 612 EA at arrival, against a target stock of 9,784 EA \u2014 creating a total gap of 10,396 EA. The system proposes a **transfer-first** approach: **TR-0041-012** transfers 4,519 EA from IN-KA-01 (arriving 2026-11-03, \u20b91,89,79,800), and **PR-0041-013** purchases the remaining 5,877 EA from supplier SUP-002 (arriving 2026-11-20, \u20b92,46,83,400) with a 20-day actual lead time. Both proposals are in draft/expedite status and need approval \u2014 which I cannot do. Key assumptions: A10, A19 (among others); daily demand is 302 EA and safety stock is 1,643 EA.",
+     "ungrounded": [
+      "612"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7261,
+   "tokens": 2016,
+   "tools": [
+    "route:replenishment",
+    "get_replenishment_options"
+   ],
+   "answer": "PR-0041-013 (purchase, draft): 5,877 EA of MAT-SOC-001 for IN-TN-01 from SUP-002, \u20b92.47 Cr, needed by 01-Nov-2026; target 9,784 minus projected -612 at arrival = gap 10,396; needs the procurement manager too (above threshold). TR-0041-012 (transfer, draft): 4,519 EA of MAT-SOC-001 for IN-TN-01 from IN-KA-01, \u20b91.90 Cr, needed by 01-Nov-2026; target 9,784 minus projected -612 at arrival = gap 10,396; needs the procurement manager too (above threshold).\n(based on the planning scenario (A15); assumptions A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A14, A15, A18, A19, A20)",
+   "llm_errors": []
+  },
+  {
+   "qid": 19,
+   "q": "Explain proposal PR-0041-008.",
+   "note": "",
+   "expect": [
+    "replenishment"
+   ],
+   "got": [
+    "replenishment"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 1,
+   "rejected": [
+    {
+     "answer": "**PR-0041-008** is a **purchase proposal** (draft, Level 2 approval needed) for **MAT-DSP-005 at IN-KA-01**, requesting **8,763 EA** from supplier **SUP-004** at a value of **\u20b91,44,58,950** (above the \u20b910,00,000 threshold). Based on the planning scenario, daily demand is 302 EA and safety stock is 4,639 EA; the target stock of 13,081 EA minus a projected on-hand of 4,318 EA at arrival leaves a gap of 8,762 EA (MOQ of 2,000 was not binding). The material is needed by 2026-11-01 but the actual lead time is ~21 days (source: actual, based on 6 receipts with only 50% on-time delivery vs. a 14-day standard), so arrival is estimated at 2026-11-21 \u2014 flagged as **expedite** since it will not arrive in time. Key assumptions: A1\u2013A10, A12, A14, A15, A18, A19, A20. I cannot approve or release this proposal; it awaits Level 2 approval.",
+     "ungrounded": [
+      "50"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 9451,
+   "tokens": 1674,
+   "tools": [
+    "route:replenishment",
+    "get_proposal_details"
+   ],
+   "answer": "PR-0041-008 (purchase, draft): 8,763 EA of MAT-DSP-005 for IN-KA-01 from SUP-004, \u20b91.45 Cr, needed by 01-Nov-2026; target 13,081 minus projected 4,318 at arrival = gap 8,762; needs the procurement manager too (above threshold). No decisions yet.\n(based on the planning scenario (A15); assumptions A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A12, A14, A15, A18, A19, A20)",
+   "llm_errors": []
+  },
+  {
+   "qid": 20,
+   "q": "Can we transfer MAT-NAND-003 to IN-TN-01 from the other plant?",
+   "note": "",
+   "expect": [
+    "replenishment"
+   ],
+   "got": [
+    "replenishment"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7567,
+   "tokens": 1584,
+   "tools": [
+    "route:replenishment",
+    "get_transfer_options"
+   ],
+   "answer": "Yes, based on the planning scenario, IN-KA-01 can transfer MAT-NAND-003 to IN-TN-01. The source plant is healthy and never drops below its safety stock, with a headroom of 4,346 EA over the horizon. A draft transfer proposal **TR-0041-009** has been generated for **4,346 EA** (valued at \u20b941,28,700) from IN-KA-01, needed by 2026-11-01 with an estimated arrival of 2026-11-03 on an expedite basis. Note that the full gap at IN-TN-01 is 12,696 EA, so this transfer covers only a portion \u2014 a separate purchase may be needed for the remainder. This proposal is in draft state and awaits approval; I cannot approve or release it. Key assumptions: A7, A14, A15.",
+   "llm_errors": []
+  },
+  {
+   "qid": 21,
+   "q": "Which supplier would supply MAT-DSP-005 for IN-KA-01?",
+   "note": "",
+   "expect": [
+    "replenishment"
+   ],
+   "got": [
+    "replenishment"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 1,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario, the supplier for MAT-DSP-005 at IN-KA-01 is **SUP-004**. This is reflected in proposal **PR-0041-008** (draft), which calls for a purchase of 8,763 EA valued at \u20b91,44,58,950. SUP-004 is the sole ranked candidate with 6 prior receipts, a 50% on-time rate, and an actual lead time of ~21 days versus a standard of 14 days (assumptions A10, A19 apply).",
+     "ungrounded": [
+      "50"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 6930,
+   "tokens": 1624,
+   "tools": [
+    "route:replenishment",
+    "get_replenishment_options"
+   ],
+   "answer": "PR-0041-008 (purchase, draft): 8,763 EA of MAT-DSP-005 for IN-KA-01 from SUP-004, \u20b91.45 Cr, needed by 01-Nov-2026; target 13,081 minus projected 4,318 at arrival = gap 8,762; needs the procurement manager too (above threshold).\n(based on the planning scenario (A15); assumptions A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A14, A15, A18, A19, A20)",
+   "llm_errors": []
+  },
+  {
+   "qid": 22,
+   "q": "Is the purchase of MAT-PCB-004 for IN-KA-01 in time?",
+   "note": "",
+   "expect": [
+    "replenishment"
+   ],
+   "got": [
+    "replenishment"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7333,
+   "tokens": 1691,
+   "tools": [
+    "route:replenishment",
+    "get_replenishment_options"
+   ],
+   "answer": "Based on the planning scenario, the purchase proposal **PR-0041-016** for **MAT-PCB-004 at IN-KA-01** is **in time**. The proposal is for 8,066 EA from supplier SUP-003 at a value of \u20b954,84,880, with an expected arrival of **2026-11-23**, which is 4 days before the needed-by date of **2026-11-27**. The lead time used is 23 days based on actual supplier performance (assumptions A10, A19). Note that the proposal is currently in **draft** state and awaits approval \u2014 I cannot approve or release it myself. Also worth noting: SUP-003 has a 0% on-time delivery rate across 6 past receipts for this material, so monitoring this order closely would be advisable.",
+   "llm_errors": []
+  },
+  {
+   "qid": 23,
+   "q": "Why this quantity?",
+   "note": "page context",
+   "expect": [
+    "replenishment"
+   ],
+   "got": [
+    "replenishment"
+   ],
+   "routing": "page",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 8159,
+   "tokens": 1719,
+   "tools": [
+    "route:replenishment",
+    "get_proposal_details"
+   ],
+   "answer": "Based on the planning scenario, proposal **PR-0041-010** for **MAT-NAND-003** at **IN-TN-01** calls for **8,350 EA** from supplier **SUP-001** because the system calculates a target stock of **13,001 EA** against a projected inventory at arrival of only **306 EA**, yielding a gap of **12,696 EA**. Of that gap, **4,346 EA** are covered by transfers from other plants, leaving a net purchase need (raw_qty) of exactly **8,350 EA**. The MOQ of 500 EA did not need to be applied since 8,350 already exceeds it. Daily demand is **302 EA** and safety stock is **3,956 EA** (assumptions A1\u2013A10, A12, A14, A15, A19, A20 apply). The proposal is in **draft** state at a value of **\u20b979,32,500**; I cannot approve or release it.",
+   "llm_errors": []
+  },
+  {
+   "qid": 24,
+   "q": "How much cash is tied up in stock we don't need?",
+   "note": "",
+   "expect": [
+    "excess_obsolete"
+   ],
+   "got": [
+    "excess_obsolete"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario, total cash tied up in unneeded stock is approximately \u20b91,13,03,985 (\u20b957,00,450 excess above max + \u20b910,73,39,400 with no demand basis), relying on assumptions A14, A15, and A17.\n\n**Excess above max stock (\u20b957,00,450):** MAT-SOC-001 at IN-KA-01 \u2014 1,357 EA over the max of 13,854, with 50.5 days of cover.\n\n**Stock with no demand basis (\u20b910,73,39,400):** MAT-PASTE-017 at IN-TN-01 (\u20b95,71,51,600) and IN-KA-01 (\u20b92,38,14,200); MAT-ADH-018 at IN-TN-01 (\u20b92,63,73,600) and IN-KA-01 (\u20b90).\n\nI cannot approve or release any disposition actions, but these materials are candidates for review and potential write-down or redeployment.",
+     "ungrounded": [
+      "11303985"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7298,
+   "tokens": 1486,
+   "tools": [
+    "route:excess_obsolete",
+    "get_excess_inventory"
+   ],
+   "answer": "\u20b957.00 lakh is tied up above maximum stock in 1 pair(s): MAT-SOC-001 at IN-KA-01: 1,357 EA above max (\u20b957.00 lakh). Another \u20b910.73 Cr sits in consumables with no demand basis, so we cannot judge whether it is needed (MAT-PASTE-017 at IN-TN-01 \u20b95.72 Cr; MAT-PASTE-017 at IN-KA-01 \u20b92.38 Cr; MAT-ADH-018 at IN-TN-01 \u20b92.64 Cr; MAT-ADH-018 at IN-KA-01 \u20b90). Max stock is derived (A14).\n(based on the planning scenario (A15); assumptions A14, A15, A17)",
+   "llm_errors": []
+  },
+  {
+   "qid": 25,
+   "q": "Which material is in excess, and by how much?",
+   "note": "",
+   "expect": [
+    "excess_obsolete"
+   ],
+   "got": [
+    "excess_obsolete"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 6298,
+   "tokens": 1313,
+   "tools": [
+    "route:excess_obsolete",
+    "get_excess_inventory"
+   ],
+   "answer": "Based on the planning scenario, **MAT-SOC-001** at **IN-KA-01** is in excess by **1,357 EA** above its max stock of 13,854 EA (usable stock: 15,211 EA), tying up **\u20b957,00,450** in cash. The current days cover stands at 50.5 days. This relies on assumptions **A14, A15, and A17**.",
+   "llm_errors": []
+  },
+  {
+   "qid": 26,
+   "q": "What is about to expire or become waste?",
+   "note": "",
+   "expect": [
+    "excess_obsolete"
+   ],
+   "got": [
+    "excess_obsolete"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "As of 2026-10-31, no lots are expiring within the next 30 days. However, there are 8 lots carrying expiry dates, all expiring on 2027-04-29 (180 days out). These cover two materials: **MAT-PASTE-017** (4 lots across IN-KA-01 and IN-TN-01) and **MAT-ADH-018** (4 lots at IN-TN-01). These consumables have no demand basis (assumptions A13, A17), which increases the risk of them becoming waste before expiry. I recommend monitoring consumption rates and exploring inter-plant transfers or accelerated usage to avoid write-offs.",
+     "ungrounded": [
+      "2026-10-31"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 3,
+   "latency_ms": 8676,
+   "tokens": 2221,
+   "tools": [
+    "route:excess_obsolete",
+    "get_expiring_lots"
+   ],
+   "answer": "Nothing expires within 30 days (\u20b90 at risk). Only 8 lots carry an expiry date, all consumables; the earliest: MAT-PASTE-017 at IN-KA-01 lot LOT-017-261031-3 expires 29-Apr-2027 (180 days, \u20b92.38 Cr); MAT-PASTE-017 at IN-TN-01 lot LOT-017-261031-4 expires 29-Apr-2027 (180 days, \u20b91.89 Cr); MAT-PASTE-017 at IN-TN-01 lot LOT-017-261031-2 expires 29-Apr-2027 (180 days, \u20b92.11 Cr); MAT-PASTE-017 at IN-TN-01 lot LOT-017-261031-4 expires 29-Apr-2027 (180 days, \u20b91.72 Cr). Consumables have no demand basis, so waste risk cannot be judged (A13, A17).",
+   "llm_errors": []
+  },
+  {
+   "qid": 27,
+   "q": "How much stock has no demand basis?",
+   "note": "",
+   "expect": [
+    "excess_obsolete"
+   ],
+   "got": [
+    "excess_obsolete"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7263,
+   "tokens": 1379,
+   "tools": [
+    "route:excess_obsolete",
+    "get_excess_inventory"
+   ],
+   "answer": "Based on the planning scenario, stock with no demand basis totals \u20b910,73,39,400 (\u20b910.73 crore) across four material-plant combinations: MAT-PASTE-017 at IN-TN-01 (\u20b95,71,51,600), MAT-PASTE-017 at IN-KA-01 (\u20b92,38,14,200), MAT-ADH-018 at IN-TN-01 (\u20b92,63,73,600), and MAT-ADH-018 at IN-KA-01 (\u20b90). These materials have usable stock but no underlying demand to justify holding them. Assumptions A14, A15, and A17 apply.",
+   "llm_errors": []
+  },
+  {
+   "qid": 28,
+   "q": "If a supplier is late, what breaks?",
+   "note": "",
+   "expect": [
+    "supplier_delay"
+   ],
+   "got": [
+    "supplier_delay"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario (run 41, as of 2026-10-31), a 7-day delay was simulated across 10 suppliers. Three suppliers show impact, each worsening one existing critical pair with no newly critical pairs or new stock-outs: **SUP-001** \u2013 MAT-ANT-012 at IN-KA-01 (1,012 units delayed; shortage moves earlier to 2026-11-01). **SUP-003** \u2013 MAT-ANT-012 at IN-KA-01 (2,092 units delayed; shortage moves earlier to 2026-11-21). **SUP-004** \u2013 MAT-ANT-012 at IN-TN-01 (113 units delayed; shortage moves earlier to 2026-12-03). All three pairs remain critical\u2192critical with unchanged stock-out dates. Assumptions A8, A9, A10, A15 and A19 apply. I cannot approve or change any orders \u2014 please escalate to a planner for action.",
+     "ungrounded": [
+      "2026-10-31",
+      "41"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 10715,
+   "tokens": 1546,
+   "tools": [
+    "route:supplier_delay",
+    "simulate_shortage_impact"
+   ],
+   "answer": "Tested all 10 suppliers; worst first. SUP-001 7 days late: 1 of 29 supplied pairs get worse, 0 newly critical, 0 new stock-outs (MAT-ANT-012 at IN-KA-01 status critical \u2192 critical, below SS 2026-11-22 \u2192 2026-11-01, stock-out 2026-12-03 \u2192 2026-12-03). SUP-003 7 days late: 1 of 28 supplied pairs get worse, 0 newly critical, 0 new stock-outs (MAT-ANT-012 at IN-KA-01 status critical \u2192 critical, below SS 2026-11-22 \u2192 2026-11-21, stock-out 2026-12-03 \u2192 2026-12-03). SUP-004 7 days late: 1 of 28 supplied pairs get worse, 0 newly critical, 0 new stock-outs (MAT-ANT-012 at IN-TN-01 status critical \u2192 critical, below SS 2026-12-04 \u2192 2026-12-03, stock-out 2026-12-14 \u2192 2026-12-14).\n(based on the planning scenario (A15); assumptions A8, A9, A10, A15, A19)",
+   "llm_errors": []
+  },
+  {
+   "qid": 29,
+   "q": "If SUP-006 is 10 days late, what breaks?",
+   "note": "",
+   "expect": [
+    "supplier_delay"
+   ],
+   "got": [
+    "supplier_delay"
+   ],
+   "routing": "keyword",
+   "facts_in_tools": true,
+   "rejections": 0,
+   "rejections_false_positive": 0,
+   "rejected": [],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "ok",
+   "route": "loop",
+   "domo_calls": 2,
+   "latency_ms": 7060,
+   "tokens": 1229,
+   "tools": [
+    "route:supplier_delay",
+    "simulate_shortage_impact"
+   ],
+   "answer": "Based on the planning scenario, a 10-day delay from SUP-006 affects 26 material-plant pairs but causes limited additional damage: **1 pair worsens**, **0 newly critical**, and **0 new stock-outs**. The worsened pair is **MAT-BOX-014 at IN-TN-01** (delayed qty: 417 units), which remains critical but sees its projected stock-out date move earlier from 2026-11-23 to 2026-11-22. No open proposals were flagged in the results. Assumptions A8, A9, A10, A15, and A19 apply.",
+   "llm_errors": []
+  },
+  {
+   "qid": 30,
+   "q": "What should we worry about most this week?",
+   "note": "classifier",
+   "expect": [
+    "shortage_forecast"
+   ],
+   "got": [
+    "coordinator"
+   ],
+   "routing": "classifier",
+   "facts_in_tools": true,
+   "rejections": 1,
+   "rejections_false_positive": 0,
+   "rejected": [
+    {
+     "answer": "Based on the planning scenario, here are this week's top concerns:\n\n**1. Critically low inventory health at 12.5%** \u2014 11 materials are critical, 16 at-risk, and **270 production orders are at risk** across both plants. Data is also **12 days stale**, so the real picture may be worse (assumptions A1, A10, A19).\n\n**2. Immediate stock-outs (tomorrow, 2026-11-01):** Eight materials breach safety stock within 1 day, led by:\n- **MAT-SOC-001 at IN-TN-01** \u2014 zero usable stock, short 14,315 EA, stock-out tomorrow, 180 orders affected (20-day lead time).\n- **MAT-CAM-008 at IN-TN-01** \u2014 zero usable stock, short 15,612 EA, 114 orders affected.\n- **MAT-BOX-014 at IN-TN-01** \u2014 only 2,540 EA vs. 3,317 SS, 114 orders affected.\n- **MAT-NAND-003 at IN-TN-01** \u2014 108 orders affected, stock-out by Nov 25.\n- **MAT-DSP-005 at IN-KA-01** \u2014 75 orders affected; **MAT-CAM-007 at IN-KA-01** \u2014 63 orders affected.\n\n**3. Overdue & open POs:** 673 of 863 open PO lines are overdue \u2014 a 78% overdue rate \u2014 meaning replenishment is severely delayed.\n\n**4. Pending approvals:** 28 draft proposals worth \u20b912.00 crore are awaiting action; expediting these is essential since lead times for the worst materials range from 18\u201325 days.\n\nI'd recommend prioritising approval of proposals for MAT-SOC-001, MAT-CAM-008, and MAT-BOX-014 first, and chasing the overdue POs. Note: I cannot approve or release anything myself \u2014 that requires your action in the system.",
+     "ungrounded": [
+      "78"
+     ]
+    }
+   ],
+   "correct": true,
+   "missing": [],
+   "ungrounded": [],
+   "routing_ok": true,
+   "cause": null,
+   "json_parse_errors": 0,
+   "status": "grounding_fallback",
+   "route": "loop",
+   "domo_calls": 4,
+   "latency_ms": 16142,
+   "tokens": 5771,
+   "tools": [
+    "route:coordinator",
+    "get_daily_brief",
+    "get_material_risk_ranking"
+   ],
+   "answer": "Highest risk first: 1. MAT-SOC-001 at IN-TN-01 (critical, below SS in 1 days, stock-out 01-Nov-2026); 2. MAT-CAM-008 at IN-TN-01 (critical, below SS in 1 days, stock-out 23-Nov-2026); 3. MAT-BOX-014 at IN-TN-01 (critical, below SS in 1 days, stock-out 23-Nov-2026); 4. MAT-NAND-003 at IN-TN-01 (critical, below SS in 1 days, stock-out 25-Nov-2026); 5. MAT-CON-013 at IN-TN-01 (critical, below SS in 1 days, stock-out 03-Dec-2026); 6. MAT-DSP-005 at IN-KA-01 (critical, below SS in 1 days, stock-out 06-Dec-2026); 7. MAT-SCR-016 at IN-TN-01 (critical, below SS in 1 days, stock-out 08-Dec-2026); 8. MAT-CAM-007 at IN-KA-01 (critical, below SS in 1 days, stock-out 10-Dec-2026); 9. MAT-MEM-002 at IN-KA-01 (critical, below SS in 20 days, stock-out 07-Dec-2026); 10. MAT-ANT-012 at IN-KA-01 (critical, below SS in 22 days, stock-out 03-Dec-2026); 11. MAT-ANT-012 at IN-TN-01 (critical, below SS in 34 days, stock-out 14-Dec-2026); 12. MAT-PCB-004 at IN-KA-01 (at risk, below SS in 27 days, stock-out 01-Dec-2026); 13. MAT-SPK-011 at IN-KA-01 (at risk, below SS in 31 days, stock-out 07-Dec-2026); 14. MAT-CBL-015 at IN-KA-01 (at risk, below SS in 35 days, stock-out 08-Dec-2026); 15. MAT-GLS-010 at IN-TN-01 (at risk, below SS in 36 days, stock-out 19-Dec-2026).\n(based on the planning scenario (A15); assumptions A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A13, A14, A15, A18, A19, A20)",
+   "llm_errors": []
+  }
+ ]
+}

@@ -1,0 +1,8 @@
+{
+  "tenant_id": "ORG-01",
+  "horizon_days": 60,
+  "staleness_days": 1,
+  "scenario_daily_units_per_plant": 300,
+  "snapshot_continuity_min_corr": 0.5,
+  "manager_approval_threshold_inr": 1000000
+}

@@ -1,0 +1,1102 @@
+import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { isEmpty, needsReplen } from '../inbound/freeSpace'
+import type { ThemeMode } from '../ui/theme'
+import type { Bin, WarehouseModel } from '../warehouse/types'
+import { buildDocks, type DockVisual } from './dockMesh'
+import { makeTextSprite } from './labels'
+import { buildMezzanine } from './mezzanine'
+import {
+  RESERVE_GAP,
+  RESERVE_LEVELS,
+  RESERVE_POST_SIZE,
+  SEPARATOR_BEAM_H,
+  isReserveLevel,
+  levelDeckTop,
+  pickRackHeight,
+  reserveBaseY,
+  reserveLevelHeight,
+  reserveLevelY,
+} from '../warehouse/rackGeometry'
+import { buildSafetyProps } from './safetyProps'
+import { buildShell } from './shell'
+import { sceneTheme, velocityColors, zoneColors, type SceneTheme } from './theme'
+
+export type BinColorMode = 'velocity' | 'zone'
+
+/**
+ * How full a location has to be to stop being flagged as empty.
+ *
+ * Zero, deliberately: "empty" means an inbound putaway may re-slot it to any SKU,
+ * and one unit of the wrong SKU is enough to stop that. The near-empty case is a
+ * replen alert, which is the overlay's other state.
+ */
+export type BinOccupancy = 'stocked' | 'low' | 'empty'
+
+/** Which occupancy state a location is in — the overlay's only rule. */
+export function binOccupancy(bin: Bin): BinOccupancy {
+  if (isEmpty(bin)) return 'empty'
+  return needsReplen(bin) ? 'low' : 'stocked'
+}
+
+/** Slab bay size, metres — the pitch of the saw-cut joints in the floor. */
+const SLAB_METRES = 6
+
+/**
+ * Metres of yard drawn beyond the footprint, in each direction.
+ *
+ * Generous, and deliberately so: the plan view sits high enough that its frame is
+ * far wider than the building, and fog used to hide where the slab stopped. Now
+ * that the fog lifts with altitude — so a plan view is crisp, which is the point
+ * of one — the slab itself has to reach past the edge of that frame, or the floor
+ * ends in a hard rectangle mid-shot. At low camera angles fog still swallows the
+ * far end of it.
+ */
+const YARD_MARGIN = 120
+
+/**
+ * Shortest a storage location is ever drawn, as a share of its slot height.
+ *
+ * The box is the *location*, and its height is how full that location is — so an
+ * emptying shelf visibly empties as the wave is picked. It is floored rather than
+ * scaled to zero because an empty location is exactly what an inbound putaway is
+ * looking for: it still has to be visible, tintable as a candidate, and clickable.
+ */
+export const MIN_BIN_FILL = 0.45
+
+/**
+ * How tall to draw a location, as a share of its slot height: {@link MIN_BIN_FILL}
+ * when it is cleared out, 1 when it is at capacity. Over-stocked locations clamp
+ * rather than growing through the shelf above.
+ */
+export function binFill(bin: Bin): number {
+  const share = bin.capacity > 0 ? bin.sku.stock / bin.capacity : 0
+  return MIN_BIN_FILL + (1 - MIN_BIN_FILL) * Math.min(1, Math.max(0, share))
+}
+
+export interface WarehouseVisual {
+  group: THREE.Group
+  /** Roof steel and lighting, so the scene can drop it for an overhead shot. */
+  roof: THREE.Group
+  /** Underside of the roof deck, metres. */
+  roofHeight: number
+  /**
+   * The reserve/overstock tier stacked above the pick face, so the scene can
+   * drop it for a near-vertical plan-view shot — the same reason `roof` is
+   * droppable, but on its own trigger: the roof hides once the camera climbs
+   * above it, while this hides once the camera looks straight down through
+   * it, which happens at ordinary hero-shot heights too.
+   */
+  reserve: THREE.Group
+  binsMesh: THREE.InstancedMesh
+  /** instance index -> bin */
+  binOrder: Bin[]
+  binIndexById: Map<string, number>
+  /**
+   * Instances `[0, pickFaceBinCount)` are the on-foot pick face; the rest are
+   * the reserve tier. Setting `binsMesh.count` to this drops bulk stock from a
+   * plan view without disturbing any of the per-instance colour buffers — see
+   * `WarehouseScene.syncReserveTier`.
+   */
+  pickFaceBinCount: number
+  /** Dock doors: their live boards, lamps, shutters and hitboxes. */
+  docks: DockVisual
+  setColorMode(mode: BinColorMode): void
+  /**
+   * Paint locations by what is *missing* from them — empty and at-replen — over
+   * the top of the velocity/zone palette. Route and putaway tints still win, so
+   * the overlay never hides work in progress.
+   */
+  setOccupancyOverlay(enabled: boolean): void
+  /** How many locations the overlay is currently calling out. */
+  occupancyCounts(): { empty: number; low: number }
+  /** Temporarily tint a bin (route highlight); pass null to restore. */
+  tintBin(binId: string, color: THREE.ColorRepresentation | null): void
+  clearTints(): void
+  /**
+   * Re-read one location from the model: its base colours and how full it is.
+   *
+   * Both are baked into buffers at build time for speed, so anything that changes
+   * a location's stock or its SKU — a line being picked off it, an inbound
+   * putaway re-slotting an empty shelf — has to say so explicitly.
+   */
+  refreshBin(binId: string): void
+  /**
+   * Re-read how full every location is.
+   *
+   * For changes that move stock everywhere at once rather than location by
+   * location — a shift reset restores the whole facility's opening on-hand — where
+   * diffing thousands of locations would cost more than simply rewriting them.
+   */
+  refreshAllBins(): void
+  dispose(): void
+}
+
+/**
+ * Build all static warehouse geometry from the model.
+ *
+ * Everything here is derived from `WarehouseModel` — there are no hardcoded
+ * object positions, so a different layout config produces a different (but
+ * equally complete) building.
+ */
+export function buildWarehouse(model: WarehouseModel, themeMode: ThemeMode = 'light'): WarehouseVisual {
+  const { config, bounds } = model
+  const SCENE_THEME = sceneTheme(themeMode)
+  const VELOCITY_COLOR = velocityColors(themeMode)
+  const ZONE_COLORS = zoneColors(themeMode)
+  const group = new THREE.Group()
+  group.name = 'warehouse'
+  const disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = []
+  // Its own group, dropped by the scene for a near-vertical plan-view shot —
+  // see `WarehouseVisual.reserve`.
+  const reserve = new THREE.Group()
+  reserve.name = 'reserveTier'
+  group.add(reserve)
+
+  const width = bounds.maxX - bounds.minX
+  const depth = bounds.maxZ - bounds.minZ
+  const centerX = (bounds.minX + bounds.maxX) / 2
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2
+
+  // ── Floor ─────────────────────────────────────────────────────────────────
+  const floorWidth = width + YARD_MARGIN
+  const floorDepth = depth + YARD_MARGIN
+  const slabTexture = makeSlabTexture(SCENE_THEME)
+  slabTexture.repeat.set(floorWidth / SLAB_METRES, floorDepth / SLAB_METRES)
+  disposables.push(slabTexture)
+
+  const floorGeo = new THREE.PlaneGeometry(floorWidth, floorDepth)
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.floor,
+    // Power-floated concrete: matte, but not chalk. A little sheen is what lets
+    // the high bays and the rack steel read as being in the same room as it.
+    roughness: 0.78,
+    metalness: 0.04,
+    map: slabTexture,
+  })
+  const floor = new THREE.Mesh(floorGeo, floorMat)
+  floor.rotation.x = -Math.PI / 2
+  floor.position.set(centerX, 0, centerZ)
+  floor.receiveShadow = true
+  group.add(floor)
+  disposables.push(floorGeo, floorMat)
+
+  // ── Painted lanes: picking aisles + cross aisles + apron ──────────────────
+  const laneMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.aisleLane,
+    roughness: 0.8,
+    transparent: true,
+    opacity: 0.95,
+  })
+  disposables.push(laneMat)
+  const laneGeos: THREE.BufferGeometry[] = []
+
+  const storageMinZ = model.crossZ[0] - config.crossAisleWidth / 2
+  const storageMaxZ = model.crossZ[model.crossZ.length - 1] + config.crossAisleWidth / 2
+
+  for (const x of model.aisleX) {
+    laneGeos.push(planeAt(x, centerZOf(storageMinZ, storageMaxZ), config.aisleWidth, storageMaxZ - storageMinZ))
+  }
+  for (const z of model.crossZ) {
+    laneGeos.push(planeAt(centerX, z, width, config.crossAisleWidth))
+  }
+  laneGeos.push(planeAt(centerX, storageMinZ - config.apronDepth * 0.5, width, config.apronDepth * 0.34))
+
+  const laneMerged = mergeGeometries(laneGeos)
+  laneGeos.forEach((g) => g.dispose())
+  if (laneMerged) {
+    const lanes = new THREE.Mesh(laneMerged, laneMat)
+    lanes.position.y = 0.012
+    lanes.receiveShadow = false
+    group.add(lanes)
+    disposables.push(laneMerged)
+  }
+
+  // ── Building shell: walls, roof steel, high bays and floor markings ───────
+  const shell = buildShell(model, themeMode)
+  group.add(shell.group)
+
+  // ── Racking: uprights + shelf decks, merged into two meshes ───────────────
+  const uprightGeos: THREE.BufferGeometry[] = []
+  const deckGeos: THREE.BufferGeometry[] = []
+  const beamGeos: THREE.BufferGeometry[] = []
+  const rackHeight = pickRackHeight(config)
+  const postSize = 0.1
+
+  // ── Reserve tier: a bulk-storage rack unit stacked above the pick face ────
+  // The pick face above stays reachable on foot; this unit is turret-truck
+  // territory, exactly like the overstock shelf above a store backroom's pick
+  // shelving. It gets its own uprights, its own beam colour, and a load-rated
+  // splice beam plus flue-guard mesh across the gap, so the join reads as two
+  // rack units bolted together rather than one shelf that grew taller.
+  const separatorGeos: THREE.BufferGeometry[] = []
+  const meshGeos: THREE.BufferGeometry[] = []
+  const reserveUprightGeos: THREE.BufferGeometry[] = []
+  const reserveDeckGeos: THREE.BufferGeometry[] = []
+  const reserveBeamGeos: THREE.BufferGeometry[] = []
+  const reservePalletGeos: THREE.BufferGeometry[] = []
+  const reserveH = RESERVE_LEVELS * reserveLevelHeight(config)
+  const reserveY0 = reserveBaseY(config)
+  const reserveTop = reserveY0 + reserveH
+  for (const rack of model.racks) {
+    const runDepth = rack.x1 - rack.x0
+    const bays = Math.round((rack.z1 - rack.z0) / config.bayWidth)
+
+    for (let i = 0; i <= bays; i++) {
+      const z = rack.z0 + i * config.bayWidth
+      for (const x of [rack.x0 + postSize / 2, rack.x1 - postSize / 2]) {
+        uprightGeos.push(boxAt(x, rackHeight / 2, z, postSize, rackHeight, postSize))
+      }
+    }
+    // A deck under each level — deliberately none above the top level, so the
+    // plan view looks straight down into the storage locations.
+    const faceX = rack.facing === 1 ? rack.x1 : rack.x0
+    for (let level = 0; level < config.levels; level++) {
+      const y = 0.16 + level * config.levelHeight
+      deckGeos.push(
+        boxAt(
+          (rack.x0 + rack.x1) / 2,
+          y,
+          (rack.z0 + rack.z1) / 2,
+          runDepth * 0.94,
+          0.045,
+          rack.z1 - rack.z0 - 0.05,
+        ),
+      )
+      // Load beam along the aisle-facing edge of every level. Without it the
+      // racking reads as floating shelves; with it you can see the structure the
+      // stock is actually sitting on from anywhere in the aisle.
+      beamGeos.push(
+        boxAt(
+          faceX - rack.facing * 0.055,
+          y + 0.05,
+          (rack.z0 + rack.z1) / 2,
+          0.11,
+          0.14,
+          rack.z1 - rack.z0 - 0.05,
+        ),
+      )
+    }
+    // Kick rail at floor level, the part a pallet truck actually bumps into.
+    beamGeos.push(
+      boxAt(faceX - rack.facing * 0.06, 0.09, (rack.z0 + rack.z1) / 2, 0.12, 0.18, rack.z1 - rack.z0 - 0.05),
+    )
+    // Thin back panel so racks read as solid from the far aisle.
+    deckGeos.push(
+      boxAt(
+        rack.facing === 1 ? rack.x0 + 0.02 : rack.x1 - 0.02,
+        rackHeight / 2,
+        (rack.z0 + rack.z1) / 2,
+        0.04,
+        rackHeight * 0.96,
+        rack.z1 - rack.z0 - 0.05,
+      ),
+    )
+
+    // ── Reserve tier over this run ──────────────────────────────────────────
+    const zMid = (rack.z0 + rack.z1) / 2
+    const zSpan = rack.z1 - rack.z0 - 0.05
+
+    // Splice beam capping the pick face, then the flue-guard mesh filling the
+    // gap above it — the visible "separator" between the two rack units.
+    separatorGeos.push(
+      boxAt((rack.x0 + rack.x1) / 2, rackHeight + SEPARATOR_BEAM_H / 2, zMid, runDepth * 0.98, SEPARATOR_BEAM_H, rack.z1 - rack.z0),
+    )
+    meshGeos.push(
+      boxAt(
+        rack.facing === 1 ? rack.x1 - 0.015 : rack.x0 + 0.015,
+        rackHeight + SEPARATOR_BEAM_H + RESERVE_GAP / 2,
+        zMid,
+        0.03,
+        RESERVE_GAP * 0.86,
+        zSpan,
+      ),
+    )
+
+    // Reserve tier's own uprights, one size heavier than the pick face's —
+    // planted at the same bay lines so the two units share a footprint.
+    for (let i = 0; i <= bays; i++) {
+      const z = rack.z0 + i * config.bayWidth
+      for (const x of [rack.x0 + RESERVE_POST_SIZE / 2, rack.x1 - RESERVE_POST_SIZE / 2]) {
+        reserveUprightGeos.push(boxAt(x, reserveY0 + reserveH / 2, z, RESERVE_POST_SIZE, reserveH, RESERVE_POST_SIZE))
+      }
+    }
+    // A deck and load beam at every reserve level — the same construction as
+    // the pick face has at each of its own — plus a capping rail at the very
+    // top of the stack and one back panel spanning the full reserve height.
+    for (let lvl = 0; lvl < RESERVE_LEVELS; lvl++) {
+      const y = reserveLevelY(config, lvl)
+      reserveDeckGeos.push(boxAt((rack.x0 + rack.x1) / 2, y + 0.05, zMid, runDepth * 0.94, 0.06, zSpan))
+      reserveBeamGeos.push(boxAt(faceX - rack.facing * 0.055, y + 0.12, zMid, 0.11, 0.17, zSpan))
+    }
+    reserveBeamGeos.push(boxAt(faceX - rack.facing * 0.055, reserveTop - 0.05, zMid, 0.1, 0.1, zSpan))
+    reserveDeckGeos.push(
+      boxAt(
+        rack.facing === 1 ? rack.x0 + 0.02 : rack.x1 - 0.02,
+        reserveY0 + reserveH / 2,
+        zMid,
+        0.04,
+        reserveH * 0.94,
+        zSpan,
+      ),
+    )
+
+    /*
+     * A bare pallet under every reserve position.
+     *
+     * The load that sits on it is no longer scattered decoration: reserve
+     * locations are real storage now, drawn from `model.bins` by the same
+     * instanced mesh the pick face uses, so they carry their SKU's colour and
+     * shrink as they are picked. All that is left to build here is the timber
+     * the stock stands on, which is genuinely fixed to the rack rather than a
+     * property of what is stored.
+     */
+    const pW = Math.min(config.bayWidth * 0.78, 1.5)
+    const pD = config.rackDepth * 0.8
+    for (let lvl = 0; lvl < RESERVE_LEVELS; lvl++) {
+      const deckTop = reserveLevelY(config, lvl) + 0.08
+      for (let i = 0; i < bays; i++) {
+        const z = rack.z0 + (i + 0.5) * config.bayWidth
+        const px = (rack.x0 + rack.x1) / 2
+        reservePalletGeos.push(boxAt(px, deckTop + 0.05, z, pW, 0.1, pD))
+      }
+    }
+  }
+
+  const uprightMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.rackUpright,
+    roughness: 0.45,
+    metalness: 0.55,
+  })
+  const deckMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.rackDeck,
+    roughness: 0.75,
+    metalness: 0.2,
+  })
+  const beamMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.rackBeam,
+    roughness: 0.42,
+    metalness: 0.72,
+  })
+  // Reserve tier: heavier, cooler steel than the pick face, so it reads as a
+  // distinct unit rather than more of the same shelving continuing upward.
+  const reserveUprightMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.reserveRack.upright,
+    roughness: 0.4,
+    metalness: 0.62,
+  })
+  const reserveDeckMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.reserveRack.deck,
+    roughness: 0.78,
+    metalness: 0.2,
+  })
+  const reserveBeamMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.reserveRack.beam,
+    roughness: 0.4,
+    metalness: 0.75,
+  })
+  // Splice beam at the join — a load-rated caution colour, the same visual
+  // convention as an at-replen shelf, borrowed here for "overhead loads".
+  const separatorMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.reserveRack.separator,
+    roughness: 0.5,
+    metalness: 0.35,
+  })
+  // Reserve pallets: the same kit as the staging lanes' loads, so bulk stock
+  // reads as the same physical stuff wherever it sits in the building. The
+  // load standing on them is drawn by the shared bin mesh, not here.
+  const reservePalletMat = new THREE.MeshStandardMaterial({ color: SCENE_THEME.props.pallet, roughness: 0.92 })
+  disposables.push(
+    uprightMat,
+    deckMat,
+    beamMat,
+    reserveUprightMat,
+    reserveDeckMat,
+    reserveBeamMat,
+    separatorMat,
+    reservePalletMat,
+  )
+
+  for (const [geos, mat] of [
+    [uprightGeos, uprightMat],
+    [deckGeos, deckMat],
+    [beamGeos, beamMat],
+  ] as const) {
+    const merged = mergeGeometries(geos)
+    geos.forEach((g) => g.dispose())
+    if (!merged) continue
+    const mesh = new THREE.Mesh(merged, mat)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    group.add(mesh)
+    disposables.push(merged)
+  }
+
+  // Flue-guard mesh and the stretch film over the reserve loads both need
+  // transparency, so they merge separately rather than joining the opaque loop.
+  const flueMeshMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.reserveRack.mesh,
+    roughness: 0.6,
+    metalness: 0.3,
+    transparent: true,
+    opacity: SCENE_THEME.reserveRack.meshOpacity,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })
+  disposables.push(flueMeshMat)
+
+  /*
+   * The reserve tier goes into its own `reserve` group, not `group` directly,
+   * so the scene can drop it for a near-vertical plan-view shot. Without that,
+   * a plan view would look straight down onto a solid deck of reserve pallets
+   * instead of the colour-coded pick locations underneath — the one thing the
+   * plan view exists to show. Unlike the roof, this can't key off camera
+   * height alone: the overview hero shot sits just as high and is exactly the
+   * angle this tier is meant to be seen from, so the scene watches the
+   * camera's tilt instead (see `WarehouseScene.syncReserveTier`).
+   */
+  for (const [geos, mat, cast] of [
+    [reserveUprightGeos, reserveUprightMat, true],
+    [reserveDeckGeos, reserveDeckMat, true],
+    [reserveBeamGeos, reserveBeamMat, true],
+    [separatorGeos, separatorMat, true],
+    [reservePalletGeos, reservePalletMat, true],
+    [meshGeos, flueMeshMat, false],
+  ] as const) {
+    // `mergeGeometries` reads `geometries[0].index` without a length check, so
+    // an empty batch throws rather than returning null. A batch legitimately
+    // empties out when a layout switches something off, so guard it here.
+    const merged = geos.length > 0 ? mergeGeometries(geos) : null
+    geos.forEach((g) => g.dispose())
+    if (!merged) continue
+    const mesh = new THREE.Mesh(merged, mat)
+    mesh.castShadow = cast
+    mesh.receiveShadow = true
+    reserve.add(mesh)
+    disposables.push(merged)
+  }
+
+  // ── Bins: one InstancedMesh for every storage location ────────────────────
+  const slotWidth = config.bayWidth / config.slotsPerBay
+  const binDepth = config.rackDepth * 0.7
+  // Gaps on all sides so individual slots stay readable at aisle level rather
+  // than merging into one coloured slab.
+  const binGeo = new THREE.BoxGeometry(binDepth, config.levelHeight * 0.5, slotWidth * 0.78)
+  
+  // Shrink-wrapped cases on a shelf, not moulded plastic: mostly matte, with
+  // just enough clearcoat for the film to catch the high bays. Trimmed down
+  // from an earlier, glossier pass — a strong clearcoat highlight on a
+  // saturated velocity colour reads as the case gleaming forward off the
+  // shelf rather than sitting matte on it, worst at the close range of the
+  // aisle-level camera.
+  const binMat = new THREE.MeshPhysicalMaterial({
+    roughness: 0.62,
+    metalness: 0.04,
+    clearcoat: 0.12,
+    clearcoatRoughness: 0.45,
+  })
+
+  binMat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>\n varying vec3 vLocalPos;`
+    )
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>\n vLocalPos = position;`
+    )
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>\n varying vec3 vLocalPos;`
+    )
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      // Contact shading: darkest where the stock meets the deck, lifting towards
+      // the open front of the slot. Deliberately gentle — the ramp is here to
+      // give the bin volume, not to change the colour it is encoding, and under
+      // ACES tone mapping a hard multiply flattens every tier to the same
+      // over-saturated primary.
+      //
+      // On top of that soft ramp, a second, much tighter term darkens just the
+      // bottom sliver of the case — a fake contact shadow where it meets the
+      // deck. Without it a box's silhouette floats against its own gradient
+      // with nothing pinning its base to the shelf, which is a big part of why
+      // a wall of bright velocity colour on dark rack steel reads as stock
+      // hovering in front of the racking rather than resting in it.
+      `#include <color_fragment>
+       float localHalfHeight = ${(config.levelHeight * 0.25).toFixed(5)};
+       float normY = smoothstep(-localHalfHeight, localHalfHeight, vLocalPos.y);
+       vec3 gradientBottom = diffuseColor.rgb * 0.52;
+       vec3 gradientTop = diffuseColor.rgb * 1.05;
+       diffuseColor.rgb = mix(gradientBottom, gradientTop, normY);
+       float contact = smoothstep(-localHalfHeight, -localHalfHeight * 0.45, vLocalPos.y);
+       diffuseColor.rgb *= mix(0.6, 1.0, contact);`
+    )
+  }
+
+  disposables.push(binGeo, binMat)
+
+  const binOrder = model.bins
+  const binsMesh = new THREE.InstancedMesh(binGeo, binMat, binOrder.length)
+  binsMesh.name = 'bins'
+  binsMesh.castShadow = false
+  binsMesh.receiveShadow = true
+  // Locations now change height as they are picked and put away, so the matrix
+  // buffer is genuinely dynamic — a handful of writes a second, not a rebuild.
+  binsMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+
+  /*
+   * Pick-face locations occupy instances `[0, pickFaceBinCount)` and reserve
+   * locations the tail, because `generateWarehouse` emits them in that order.
+   *
+   * That ordering is load-bearing, not incidental: dropping the reserve tier
+   * for a near-vertical plan view is then just `binsMesh.count =
+   * pickFaceBinCount` — no second mesh, no second index space for the tint and
+   * palette buffers to stay in step with, and no per-frame matrix rewriting.
+   * Three.js honours `count` for raycasting too, so a hidden bulk location
+   * also stops being clickable, which is what you want when it is not on
+   * screen.
+   */
+  const pickFaceBinCount = binOrder.findIndex((b) => isReserveLevel(config, b.level))
+  const firstReserveIndex = pickFaceBinCount < 0 ? binOrder.length : pickFaceBinCount
+
+  const matrix = new THREE.Matrix4()
+  const binPos = new THREE.Vector3()
+  const binScale = new THREE.Vector3(1, 1, 1)
+  const noRotation = new THREE.Quaternion()
+  const binHeight = config.levelHeight * 0.5
+  const binIndexById = new Map<string, number>()
+
+  /*
+   * A bulk position is a pallet, not a case slot: it takes the full bay width
+   * and most of the rack's depth. The instanced geometry is sized for the pick
+   * face, so reserve instances are scaled up to their real footprint rather
+   * than given a second geometry — one mesh keeps the whole tint/palette/
+   * refresh path single-index, which is the thing worth protecting here.
+   */
+  const reserveScaleX = (config.rackDepth * 0.72) / binDepth
+  const reserveScaleZ = (config.bayWidth * 0.74) / (slotWidth * 0.78)
+  const reserveBinHeight = reserveLevelHeight(config) * 0.46
+
+  /**
+   * How far a bin's front face sits behind the rack's own front line — the
+   * plane the aisle-facing upright, load beam and kick rail all share.
+   *
+   * Was a *negative* inset (i.e. an overhang) on one side and a positive one
+   * on the other, an artefact of `facing` flipping sign between `L` and `R`
+   * racks without the offset flipping with it: `L` bins sat 2cm proud of the
+   * beam while `R` bins sat flush. At close range (aisle-level camera, or a
+   * side elevation) that reads as stock spilling forward past the shelf
+   * structure rather than sitting on it. Both sides now recess by the same
+   * margin, well inside the slack `rackDepth` already leaves behind a
+   * `binDepth` that is only 70% of it.
+   */
+  const BIN_FRONT_INSET = 0.06
+
+  /**
+   * Place one location's box: scaled to its fill and sitting on its shelf deck,
+   * so stock comes off the top of the pile rather than shrinking about its middle.
+   */
+  const writeBinMatrix = (bin: Bin, index: number) => {
+    const facing = bin.side === 'L' ? 1 : -1
+    const fill = binFill(bin)
+    const reserve = isReserveLevel(config, bin.level)
+    /*
+     * Rest the box on the shelf it actually sits on, not on a point derived
+     * from `bin.face.y` — that field carries a deliberate upward offset
+     * (30% of the level pitch, see `generate.ts`) so a picker's camera target
+     * and the inspector's selection box land mid-case rather than at floor
+     * level, and reusing it here left the case's underside floating ~3-4cm
+     * above the deck it should be resting on. `levelDeckTop` instead derives
+     * from the same shared rack arithmetic the deck geometry is built from,
+     * for either tier, so the two can never drift apart.
+     */
+    const deckTop = levelDeckTop(config, bin.level)
+    // Pallet deck under a bulk position, so its stock stands on the timber.
+    const base = reserve ? deckTop + 0.1 : deckTop
+    const height = reserve ? reserveBinHeight : binHeight
+    const depthScale = reserve ? reserveScaleX : 1
+    const inset = reserve ? (binDepth * depthScale) / 2 + 0.04 : binDepth / 2 + BIN_FRONT_INSET
+
+    binPos.set(bin.face.x - facing * inset, base + (height * fill) / 2, bin.face.z)
+    binScale.set(depthScale, (height * fill) / binHeight, reserve ? reserveScaleZ : 1)
+    matrix.compose(binPos, noRotation, binScale)
+    binsMesh.setMatrixAt(index, matrix)
+  }
+
+  binOrder.forEach((bin, i) => {
+    writeBinMatrix(bin, i)
+    binIndexById.set(bin.id, i)
+  })
+  binsMesh.instanceMatrix.needsUpdate = true
+
+  // Base colours per mode, kept so tints can be reverted exactly.
+  // `Color.setHex` already converts sRGB into the renderer's working (linear)
+  // space, which is exactly what `instanceColor` expects — converting again
+  // here would crush every bin into an over-saturated primary.
+  const baseColor = new THREE.Color()
+  const palettes: Record<BinColorMode, Float32Array> = {
+    velocity: new Float32Array(binOrder.length * 3),
+    zone: new Float32Array(binOrder.length * 3),
+  }
+
+
+  binOrder.forEach((bin, i) => {
+    baseColor.setHex(VELOCITY_COLOR[bin.sku.velocity])
+    palettes.velocity[i * 3] = baseColor.r
+    palettes.velocity[i * 3 + 1] = baseColor.g
+    palettes.velocity[i * 3 + 2] = baseColor.b
+    
+    baseColor.setHex(ZONE_COLORS[bin.aisle % ZONE_COLORS.length])
+    palettes.zone[i * 3] = baseColor.r
+    palettes.zone[i * 3 + 1] = baseColor.g
+    palettes.zone[i * 3 + 2] = baseColor.b
+  })
+
+  let mode: BinColorMode = 'velocity'
+  const instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(palettes.velocity), 3)
+  instanceColor.setUsage(THREE.DynamicDrawUsage)
+  binsMesh.instanceColor = instanceColor
+  const tinted = new Set<number>()
+
+  /*
+   * Occupancy overlay.
+   *
+   * Kept as a third palette plus a per-location state byte rather than being
+   * folded into the velocity/zone palettes, because it is orthogonal to both: an
+   * empty location has no stock and therefore no velocity worth colouring, and
+   * switching colour mode must not lose the fact that it is empty. The state byte
+   * is what `restore` consults, so tints, colour-mode swaps and stock changes all
+   * resolve to the same answer without any of them knowing about the others.
+   */
+  const OCC = SCENE_THEME.occupancy
+  const occupancy = new Uint8Array(binOrder.length)
+  const occupancyPalette = new Float32Array(binOrder.length * 3)
+  let overlay = true
+
+  const writePalette = (target: Float32Array, index: number, hex: number) => {
+    baseColor.setHex(hex)
+    target[index * 3] = baseColor.r
+    target[index * 3 + 1] = baseColor.g
+    target[index * 3 + 2] = baseColor.b
+  }
+
+  /** Re-read one location's occupancy state. Returns true when it changed. */
+  const writeOccupancy = (bin: Bin, index: number): boolean => {
+    const state = binOccupancy(bin)
+    const next = state === 'empty' ? 2 : state === 'low' ? 1 : 0
+    if (occupancy[index] === next) return false
+    occupancy[index] = next
+    if (next !== 0) writePalette(occupancyPalette, index, next === 2 ? OCC.empty : OCC.low)
+    return true
+  }
+
+  binOrder.forEach(writeOccupancy)
+
+  const restore = (index: number) => {
+    const src = overlay && occupancy[index] !== 0 ? occupancyPalette : palettes[mode]
+    const arr = instanceColor.array as Float32Array
+    arr[index * 3] = src[index * 3]
+    arr[index * 3 + 1] = src[index * 3 + 1]
+    arr[index * 3 + 2] = src[index * 3 + 2]
+  }
+
+  /** Rewrite every location that is not currently carrying a tint. */
+  const restoreAll = () => {
+    for (let i = 0; i < binOrder.length; i++) {
+      if (!tinted.has(i)) restore(i)
+    }
+    instanceColor.needsUpdate = true
+  }
+
+  restoreAll()
+
+  // ── Dock doors ────────────────────────────────────────────────────────────
+  // Their own module: a door carries live state — a shutter, a lamp and a board —
+  // and is the only piece of the building you can point at and ask what it is
+  // doing right now.
+  const docks = buildDocks(model, themeMode)
+  group.add(docks.group)
+
+  // ── Site safety kit ───────────────────────────────────────────────────────
+  // Rack-end impact guards and the reach trucks staged near the aisles that
+  // service the reserve tier — see `safetyProps.ts`.
+  const safety = buildSafetyProps(model, themeMode)
+  group.add(safety.group)
+
+  // ── Mezzanine: the floor and stair that make the reserve tier walkable ────
+  // Nested under `reserve`, not `group` — it has to hide in the same
+  // near-vertical plan view the rest of the reserve tier already does, or a
+  // glass floor spanning the whole storage block would sit right between the
+  // camera and every pick location under it.
+  const mezzanine = buildMezzanine(model, themeMode)
+  reserve.add(mezzanine.group)
+
+  const visual: WarehouseVisual = {
+    group,
+    roof: shell.roof,
+    roofHeight: shell.roofHeight,
+    reserve,
+    binsMesh,
+    binOrder,
+    binIndexById,
+    pickFaceBinCount: firstReserveIndex,
+    docks,
+    setColorMode(next) {
+      mode = next
+      tinted.clear()
+      restoreAll()
+    },
+    setOccupancyOverlay(enabled) {
+      if (enabled === overlay) return
+      overlay = enabled
+      restoreAll()
+    },
+    occupancyCounts() {
+      let empty = 0
+      let low = 0
+      for (const state of occupancy) {
+        if (state === 2) empty++
+        else if (state === 1) low++
+      }
+      return { empty, low }
+    },
+    tintBin(binId, color) {
+      const index = binIndexById.get(binId)
+      if (index === undefined) return
+      if (color === null) {
+        restore(index)
+        tinted.delete(index)
+      } else {
+        const c = new THREE.Color(color)
+        const arr = instanceColor.array as Float32Array
+        arr[index * 3] = c.r
+        arr[index * 3 + 1] = c.g
+        arr[index * 3 + 2] = c.b
+        tinted.add(index)
+      }
+      instanceColor.needsUpdate = true
+    },
+    clearTints() {
+      if (tinted.size === 0) return
+      for (const index of tinted) restore(index)
+      tinted.clear()
+      instanceColor.needsUpdate = true
+    },
+    refreshAllBins() {
+      binOrder.forEach(writeBinMatrix)
+      binsMesh.instanceMatrix.needsUpdate = true
+      binOrder.forEach(writeOccupancy)
+      restoreAll()
+    },
+    refreshBin(binId) {
+      const index = binIndexById.get(binId)
+      if (index === undefined) return
+      const bin = binOrder[index]
+
+      writeBinMatrix(bin, index)
+      binsMesh.instanceMatrix.needsUpdate = true
+
+      writePalette(palettes.velocity, index, VELOCITY_COLOR[bin.sku.velocity])
+      writePalette(palettes.zone, index, ZONE_COLORS[bin.aisle % ZONE_COLORS.length])
+      // Stock moved, so whether this location is empty or at replen may have moved
+      // with it — that is what the overlay is reading.
+      writeOccupancy(bin, index)
+      // A tinted bin keeps its tint; the new base shows through once it clears.
+      if (!tinted.has(index)) {
+        restore(index)
+        instanceColor.needsUpdate = true
+      }
+    },
+    dispose() {
+      binsMesh.dispose()
+      shell.dispose()
+      docks.dispose()
+      safety.dispose()
+      mezzanine.dispose()
+      for (const d of disposables) d.dispose()
+      group.traverse((obj) => {
+        if (obj instanceof THREE.Sprite) {
+          const mat = obj.material as THREE.SpriteMaterial
+          mat.map?.dispose()
+          mat.dispose()
+        }
+      })
+    },
+  }
+
+  group.add(binsMesh)
+
+  // ── Pack stations and staging lanes ───────────────────────────────────────
+  const structureMat = new THREE.MeshStandardMaterial({ color: SCENE_THEME.dock, roughness: 0.6, metalness: 0.25 })
+  const packTopMat = new THREE.MeshStandardMaterial({
+    color: SCENE_THEME.packTop,
+    roughness: 0.5,
+    emissive: new THREE.Color(SCENE_THEME.packTop).multiplyScalar(0.22),
+  })
+  // The pallet kit standing in the staging lanes. One material each, shared
+  // across every instance.
+  const P = SCENE_THEME.props
+  const palletMat = new THREE.MeshStandardMaterial({ color: P.pallet, roughness: 0.92 })
+  const cartonMat = new THREE.MeshStandardMaterial({ color: P.carton, roughness: 0.88 })
+  const wrapMat = new THREE.MeshStandardMaterial({
+    color: P.wrap,
+    roughness: 0.35,
+    transparent: true,
+    opacity: P.wrapOpacity,
+    depthWrite: false,
+  })
+  disposables.push(structureMat, packTopMat, palletMat, cartonMat, wrapMat)
+
+  /*
+   * Scenery is collected as geometry and merged once, not added as meshes.
+   *
+   * Drawn individually, two staging lanes are ~200 extra draw calls — more than
+   * the rest of the building put together, for objects that never move. Merged by
+   * material it is three.
+   */
+  const palletGeos: THREE.BufferGeometry[] = []
+  const cartonGeos: THREE.BufferGeometry[] = []
+  const wrapGeos: THREE.BufferGeometry[] = []
+
+  for (const f of model.facilities) {
+    // Dock doors are built by `buildDocks`, which owns their live state.
+    if (f.kind === 'dock') continue
+    if (f.kind === 'pack') {
+      const benchGeo = new THREE.BoxGeometry(f.width, 0.9, f.depth)
+      const bench = new THREE.Mesh(benchGeo, structureMat)
+      bench.position.set(f.pos.x, 0.45, f.pos.y)
+      bench.castShadow = true
+      const topGeo = new THREE.BoxGeometry(f.width + 0.12, 0.08, f.depth + 0.12)
+      const top = new THREE.Mesh(topGeo, packTopMat)
+      top.position.set(f.pos.x, 0.94, f.pos.y)
+      group.add(bench, top)
+      disposables.push(benchGeo, topGeo)
+
+      const label = makeTextSprite(f.label, { fontSize: 44, worldHeight: 0.62, ...SCENE_THEME.label })
+      label.position.set(f.pos.x, 1.9, f.pos.y)
+      group.add(label)
+    } else {
+      const outline = new THREE.Mesh(
+        planeAt(f.pos.x, f.pos.y, f.width, f.depth),
+        new THREE.MeshBasicMaterial({
+          color: SCENE_THEME.stagingEdge,
+          transparent: true,
+          opacity: 0.1,
+          side: THREE.DoubleSide,
+        }),
+      )
+      outline.position.y = 0.02
+      group.add(outline)
+      disposables.push(outline.geometry, outline.material as THREE.Material)
+
+      /*
+       * Wrapped pallets standing in the lane.
+       *
+       * Staging lanes are where stock waits, and an empty painted rectangle
+       * labelled "Outbound Staging" is the emptiest-looking part of a warehouse.
+       * They are parked along the two long edges so the middle stays clear —
+       * pickers return to the node at the centre of this footprint, and a picker
+       * walking through a pallet would undo the point of drawing one.
+       *
+       * Count and stack height come off the facility's own index, so the same
+       * layout always stages the same pallets.
+       */
+      const seed = model.facilities.indexOf(f)
+      const lanes = Math.max(2, Math.floor((f.width - 0.6) / 1.45))
+      for (let i = 0; i < lanes; i++) {
+        for (const side of [-1, 1] as const) {
+          // One gap per row, so the rows are not suspiciously uniform.
+          if ((i + (side > 0 ? 1 : 0) + seed) % 4 === 0) continue
+
+          const x = f.pos.x - f.width / 2 + 0.75 + i * ((f.width - 1.5) / Math.max(1, lanes - 1))
+          const z = f.pos.y + side * (f.depth / 2 - 0.65)
+          const courses = 2 + ((i + seed + (side > 0 ? 1 : 0)) % 3)
+
+          palletGeos.push(boxAt(x, 0.07, z, 1.2, 0.14, 1.0))
+
+          for (let c = 0; c < courses; c++) {
+            for (const [dx, dz] of [
+              [-0.28, -0.24],
+              [0.28, -0.24],
+              [-0.28, 0.24],
+              [0.28, 0.24],
+            ] as const) {
+              cartonGeos.push(boxAt(x + dx, 0.31 + c * 0.34, z + dz, 0.52, 0.34, 0.44))
+            }
+          }
+
+          // Stretch film over the whole load, sized to the courses under it.
+          const wrapHeight = courses * 0.34 + 0.06
+          wrapGeos.push(boxAt(x, 0.14 + wrapHeight / 2, z, 1.1, wrapHeight, 0.94))
+        }
+      }
+
+      const label = makeTextSprite(f.label, {
+        fontSize: 44,
+        worldHeight: 0.66,
+        ...SCENE_THEME.staging,
+      })
+      label.position.set(f.pos.x, 1.4, f.pos.y)
+      group.add(label)
+    }
+  }
+
+  // One mesh per scenery material. Shadows are cast by the things with real bulk
+  // (pallet loads, bumpers) and only received by the flat plate on the floor.
+  for (const [geos, mat, cast, receive] of [
+    [palletGeos, palletMat, true, false],
+    [cartonGeos, cartonMat, true, false],
+    [wrapGeos, wrapMat, false, false],
+  ] as const) {
+    const merged = mergeGeometries(geos)
+    geos.forEach((g) => g.dispose())
+    if (!merged) continue
+    const mesh = new THREE.Mesh(merged, mat)
+    mesh.castShadow = cast
+    mesh.receiveShadow = receive
+    group.add(mesh)
+    disposables.push(merged)
+  }
+
+  // ── Aisle identifiers at both ends of every aisle ─────────────────────────
+  model.aisleX.forEach((x, a) => {
+    const text = `A${String(a + 1).padStart(2, '0')}`
+    for (const z of [storageMinZ - 0.6, storageMaxZ + 0.6]) {
+      const sprite = makeTextSprite(text, {
+        fontSize: 52,
+        worldHeight: 0.78,
+        ...SCENE_THEME.aisleLabel,
+      })
+      sprite.position.set(x, 0.95, z)
+      group.add(sprite)
+    }
+  })
+
+  // ── Perimeter curb ────────────────────────────────────────────────────────
+  const curbMat = new THREE.MeshStandardMaterial({ color: SCENE_THEME.curb, roughness: 0.9 })
+  disposables.push(curbMat)
+  const curbGeos = [
+    boxAt(centerX, 0.18, bounds.minZ - 0.3, width + 4, 0.36, 0.4),
+    boxAt(centerX, 0.18, bounds.maxZ + 0.3, width + 4, 0.36, 0.4),
+    boxAt(bounds.minX - 0.3, 0.18, centerZ, 0.4, 0.36, depth + 4),
+    boxAt(bounds.maxX + 0.3, 0.18, centerZ, 0.4, 0.36, depth + 4),
+  ]
+  const curbMerged = mergeGeometries(curbGeos)
+  curbGeos.forEach((g) => g.dispose())
+  if (curbMerged) {
+    group.add(new THREE.Mesh(curbMerged, curbMat))
+    disposables.push(curbMerged)
+  }
+
+  return visual
+}
+
+function centerZOf(a: number, b: number) {
+  return (a + b) / 2
+}
+
+function boxAt(x: number, y: number, z: number, w: number, h: number, d: number): THREE.BufferGeometry {
+  const geo = new THREE.BoxGeometry(w, h, d)
+  geo.translate(x, y, z)
+  return geo
+}
+
+/** Horizontal plane, already rotated flat and translated. */
+function planeAt(x: number, z: number, w: number, d: number): THREE.BufferGeometry {
+  const geo = new THREE.PlaneGeometry(w, d)
+  geo.rotateX(-Math.PI / 2)
+  geo.translate(x, 0, z)
+  return geo
+}
+
+/**
+ * One concrete slab bay, tiled across the floor.
+ *
+ * Three things in one texture, because they are three real features of a
+ * power-floated warehouse slab and each does a different job:
+ *
+ *   the saw-cut joint at the bay edge — a 6 m grid of them is the strongest cue
+ *   that this is a poured floor rather than a shaded plane;
+ *   a faint 1 m grid inside it, which is what gives the viewer scale;
+ *   and a fine aggregate speckle, which stops the floor reading as flat paint
+ *   under the near-specular sheen the material now has.
+ *
+ * The speckle comes off a fixed-seed LCG rather than `Math.random`, so the same
+ * layout always produces the same floor — a texture that reshuffles on every
+ * theme swap would be visible as a flicker.
+ */
+function makeSlabTexture(theme: SceneTheme): THREE.Texture {
+  const size = 512
+  /** Texels per metre, from the tile being {@link SLAB_METRES} across. */
+  const perMetre = size / SLAB_METRES
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')!
+
+  // The map multiplies the material colour, so white is "leave the concrete be".
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, size, size)
+
+  let seed = 0x9e3779b9
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0
+    return seed / 0xffffffff
+  }
+
+  ctx.fillStyle = theme.floorSpeckle
+  for (let i = 0; i < 2600; i++) {
+    const r = 0.4 + rand() * 1.5
+    ctx.beginPath()
+    ctx.arc(rand() * size, rand() * size, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  // Broad trowel mottling, so the slab is not uniformly speckled either. The
+  // outer stop fades the speckle's own colour out rather than fading to white,
+  // which canvas would interpolate through as a visible pale halo.
+  const transparent = theme.floorSpeckle.replace(/,\s*[\d.]+\)$/, ',0)')
+  for (let i = 0; i < 14; i++) {
+    const x = rand() * size
+    const y = rand() * size
+    const r = size * (0.08 + rand() * 0.16)
+    const shade = ctx.createRadialGradient(x, y, 0, x, y, r)
+    shade.addColorStop(0, theme.floorSpeckle)
+    shade.addColorStop(1, transparent)
+    ctx.fillStyle = shade
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  ctx.strokeStyle = theme.floorGrid
+  ctx.lineWidth = 1
+  for (let m = 1; m < SLAB_METRES; m++) {
+    const p = Math.round(m * perMetre) + 0.5
+    ctx.beginPath()
+    ctx.moveTo(p, 0)
+    ctx.lineTo(p, size)
+    ctx.moveTo(0, p)
+    ctx.lineTo(size, p)
+    ctx.stroke()
+  }
+
+  // Saw-cut joint on two edges only: the neighbouring tile draws the other two,
+  // so a shared cut is one line wide instead of two.
+  ctx.strokeStyle = theme.floorJoint
+  ctx.lineWidth = 2.5
+  ctx.beginPath()
+  ctx.moveTo(1.25, 0)
+  ctx.lineTo(1.25, size)
+  ctx.moveTo(0, 1.25)
+  ctx.lineTo(size, 1.25)
+  ctx.stroke()
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+  texture.colorSpace = THREE.SRGBColorSpace
+  // Generous, because from the plan view the floor is seen at a hard grazing
+  // angle at the edges of the frame. Three clamps this to the device maximum.
+  texture.anisotropy = 8
+  return texture
+}

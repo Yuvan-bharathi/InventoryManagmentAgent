@@ -1,0 +1,135 @@
+import * as THREE from 'three'
+import type { WarehouseModel } from '../warehouse/types'
+
+export type CameraPresetId = 'overview' | 'top' | 'aisle' | 'pack' | 'dock'
+
+export interface CameraPreset {
+  id: CameraPresetId
+  label: string
+  hint: string
+}
+
+export const CAMERA_PRESETS: CameraPreset[] = [
+  { id: 'overview', label: 'Overview', hint: 'Angled hero view of the whole module' },
+  { id: 'top', label: 'Top-down', hint: 'Plan view — best for reading pick paths' },
+  { id: 'aisle', label: 'Aisle level', hint: 'Operator eye height inside an aisle' },
+  { id: 'pack', label: 'Pack line', hint: 'Pack benches, takeaway conveyor and the sorter' },
+  { id: 'dock', label: 'Dock view', hint: 'From the outbound dock towards the racks' },
+]
+
+export interface CameraPose {
+  position: THREE.Vector3
+  target: THREE.Vector3
+}
+
+/** Compute a framing pose for a preset from the model's real dimensions. */
+export function poseFor(preset: CameraPresetId, model: WarehouseModel): CameraPose {
+  const { bounds } = model
+  const width = bounds.maxX - bounds.minX
+  const depth = bounds.maxZ - bounds.minZ
+  const centerX = (bounds.minX + bounds.maxX) / 2
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2
+  const span = Math.max(width, depth)
+
+  switch (preset) {
+    case 'top':
+      // Plan view: framed closely so multi-tier racks and pick aisles fill the screen
+      return {
+        position: new THREE.Vector3(centerX, Math.max(span * 0.62, 36), centerZ + span * 0.03),
+        target: new THREE.Vector3(centerX, 0, centerZ),
+      }
+
+    case 'aisle': {
+      // Stand in the middle aisle at the front cross aisle, look down the aisle.
+      const aisle = model.aisleX[Math.floor(model.aisleX.length / 2)] ?? centerX
+      const z = model.crossZ[0] ?? bounds.minZ
+      return {
+        position: new THREE.Vector3(aisle, 1.72, z - 1.5),
+        target: new THREE.Vector3(aisle, 1.35, bounds.maxZ),
+      }
+    }
+
+    case 'pack': {
+      // Three-quarter view down the pack wall, framed so the benches, the
+      // takeaway trunk above them and the dock chutes are all in shot.
+      const packs = model.facilities.filter((f) => f.kind === 'pack')
+      const packZ = packs[0]?.pos.y ?? bounds.minZ + depth * 0.1
+      const dockZ = model.facilities.find((f) => f.kind === 'dock')?.pos.y ?? bounds.minZ
+      const apron = Math.abs(packZ - dockZ)
+      const focusZ = (packZ + dockZ) / 2
+      return {
+        position: new THREE.Vector3(
+          centerX - width * 0.42,
+          Math.max(9, apron * 0.85),
+          focusZ - apron * 0.55,
+        ),
+        target: new THREE.Vector3(centerX, 1.6, focusZ),
+      }
+    }
+
+    case 'dock': {
+      const dock = model.facilities.find((f) => f.kind === 'dock')
+      const x = dock?.pos.x ?? centerX
+      return {
+        position: new THREE.Vector3(x, 7.5, bounds.minZ - depth * 0.16),
+        target: new THREE.Vector3(centerX, 1.5, centerZ + depth * 0.08),
+      }
+    }
+
+    case 'overview':
+    default:
+      return {
+        position: new THREE.Vector3(centerX + span * 0.22, Math.max(span * 0.28, 22), bounds.minZ - depth * 0.2),
+        target: new THREE.Vector3(centerX, 2, centerZ),
+      }
+  }
+}
+
+/** Critically-damped-ish tween used for preset transitions. */
+export class CameraTween {
+  private active = false
+  private fromPos = new THREE.Vector3()
+  private toPos = new THREE.Vector3()
+  private fromTarget = new THREE.Vector3()
+  private toTarget = new THREE.Vector3()
+  private t = 0
+  private duration = 0.9
+
+  start(current: CameraPose, next: CameraPose, duration = 0.9): void {
+    this.fromPos.copy(current.position)
+    this.fromTarget.copy(current.target)
+    this.toPos.copy(next.position)
+    this.toTarget.copy(next.target)
+    this.duration = Math.max(0.05, duration)
+    this.t = 0
+    this.active = true
+  }
+
+  get running(): boolean {
+    return this.active
+  }
+
+  private outPose: CameraPose = {
+    position: new THREE.Vector3(),
+    target: new THREE.Vector3(),
+  }
+
+  /** @returns the pose for this frame, or null when idle. */
+  update(dt: number): CameraPose | null {
+    if (!this.active) return null
+    this.t = Math.min(1, this.t + dt / this.duration)
+    const e = easeInOutCubic(this.t)
+    this.outPose.position.copy(this.fromPos).lerp(this.toPos, e)
+    this.outPose.target.copy(this.fromTarget).lerp(this.toTarget, e)
+    if (this.t >= 1) this.active = false
+    return this.outPose
+  }
+
+  cancel(): void {
+    this.active = false
+  }
+}
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}

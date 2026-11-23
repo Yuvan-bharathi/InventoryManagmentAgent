@@ -1,0 +1,149 @@
+[
+  {
+    "id": "A1",
+    "description": "As-of date = latest snapshot_date in the data; snapshot history is not used for trends (days are independent).",
+    "value": {
+      "as_of_date": "latest"
+    },
+    "owner_question": "Which date should we treat as 'today' for the stock position, and is the daily snapshot history meant to be continuous?"
+  },
+  {
+    "id": "A2",
+    "description": "Plant of a stock row = plant_id on that row in the latest snapshot.",
+    "value": {},
+    "owner_question": "The same material and warehouse appear under different plants on different days. Which plant does a warehouse belong to?"
+  },
+  {
+    "id": "A3",
+    "description": "Usable = on_hand - allocated - blocked - quality_hold, floored at 0 (no overlap assumed between the deductions).",
+    "value": {
+      "deductions_overlap": false
+    },
+    "owner_question": "Can the same unit be both allocated and blocked / on quality hold, or are the three deductions separate quantities?"
+  },
+  {
+    "id": "A4",
+    "description": "inventory_status is ignored in calculations; the quantity columns decide.",
+    "value": {},
+    "owner_question": "What does inventory_status mean when a row marked QUALITY_HOLD still has most of its quantity unrestricted?"
+  },
+  {
+    "id": "A5",
+    "description": "Safety stock = dim_material.safety_stock_qty, applied per material x plant; the snapshot's value is ignored.",
+    "value": {
+      "ss_source": "master"
+    },
+    "owner_question": "Which safety stock is authoritative: the material master or the per-warehouse value in the snapshot?"
+  },
+  {
+    "id": "A6",
+    "description": "All four warehouses count toward plant stock; the warehouse is a filter.",
+    "value": {
+      "production_warehouses": "all"
+    },
+    "owner_question": "Should stock in WIP-WH-01 and FG-WH-01 count as available component supply for production?"
+  },
+  {
+    "id": "A7",
+    "description": "Snapshot in_transit_qty = internal transfers, arriving in_transit_days after as-of; not the same as open PO quantity.",
+    "value": {
+      "in_transit_days": 3
+    },
+    "owner_question": "What is in_transit_qty (inbound PO goods or inter-plant transfers) and when does it arrive?"
+  },
+  {
+    "id": "A8",
+    "description": "PO open qty = ordered - received for OPEN / PARTIAL; CLOSED = short-closed, nothing more due.",
+    "value": {},
+    "owner_question": "Every CLOSED line received less than ordered. Is the remainder cancelled, or still due?"
+  },
+  {
+    "id": "A9",
+    "description": "receipt_date <= as-of = actual receipt; a later receipt_date = expected receipt date. What arrives on that date depends on A19: by default only the open quantity (ordered - received) of OPEN / PARTIAL lines; the received_qty already recorded on future-dated lines is not counted.",
+    "value": {},
+    "owner_question": "Some lines carry a receipt_date after the as-of date with a received_qty. Has that quantity arrived, or is it a planned receipt?"
+  },
+  {
+    "id": "A10",
+    "description": "Overdue open PO lines are expected at as-of + that supplier's average delay (past receipts, receipt - promised, at least 1 day).",
+    "value": {},
+    "owner_question": "For open lines past their promised date, is there a confirmed new delivery date?"
+  },
+  {
+    "id": "A11",
+    "description": "Approved vendor = supplier whose material_category matches the material's. AUDIO and CONNECTOR have no matching supplier: proposals show 'supplier to be assigned'.",
+    "value": {},
+    "owner_question": "Which suppliers are approved for each material, in particular AUDIO and CONNECTOR parts?"
+  },
+  {
+    "id": "A12",
+    "description": "Price for proposal value = standard_price_inr; RFQ prices not used.",
+    "value": {},
+    "owner_question": "Which price should a purchase proposal be valued at?"
+  },
+  {
+    "id": "A13",
+    "description": "Expiry checked only where expiry_date exists (2 consumables).",
+    "value": {},
+    "owner_question": "Do any other materials have shelf-life limits we should track?"
+  },
+  {
+    "id": "A14",
+    "description": "Max stock is not in the data: max = SS + daily demand x (lead time + review period) x max_factor.",
+    "value": {
+      "review_days": 7,
+      "max_factor": 1.5
+    },
+    "owner_question": "Do you have a maximum stock level or days-of-cover limit per material?"
+  },
+  {
+    "id": "A15",
+    "description": "No forward production plan exists (latest planned start 15-Oct). Demand comes from the planning scenario, labelled 'Planning scenario' in the UI.",
+    "value": {
+      "demand_source": "scenario"
+    },
+    "owner_question": "Can you share the forward production plan (MPS) for the next 60 days?"
+  },
+  {
+    "id": "A16",
+    "description": "Customer orders don't link to production orders (0% ID match): display only, no customer impact.",
+    "value": {},
+    "owner_question": "How do production orders link to customer orders?"
+  },
+  {
+    "id": "A17",
+    "description": "Consumables (solder paste, adhesive) are not in the BOM: no demand basis, so they are excluded from shortage calculation and flagged.",
+    "value": {},
+    "owner_question": "What is the consumption rate of solder paste and thermal adhesive per phone or per day?"
+  },
+  {
+    "id": "A18",
+    "description": "Actual lead time = receipt_date - po_date on past receipts, per supplier x material.",
+    "value": {},
+    "owner_question": "Is receipt_date the goods-receipt posting date at the plant?"
+  },
+  {
+    "id": "A19",
+    "description": "Future-dated receipts: open_qty_only = only ordered - received of OPEN / PARTIAL lines is expected supply; full_received_qty = the received_qty on lines with receipt_date after as-of also arrives on that date.",
+    "value": {
+      "future_receipt_mode": "open_qty_only"
+    },
+    "owner_question": "Lines dated after the as-of date carry a received_qty. Is that quantity already in stock, still to arrive, or not real?"
+  },
+  {
+    "id": "A20",
+    "description": "Planning lead time for the supplier a proposal would pick (approved -> best on-time % -> shortest lead time): actual = that supplier's actual lead time (A18), master = dim_material.lead_time_days, max = the larger of the two.",
+    "value": {
+      "lead_time_source": "max"
+    },
+    "owner_question": "Should planning use the supplier's actual lead time, the master lead time, or the more cautious of the two?"
+  },
+  {
+    "id": "A21",
+    "description": "Overdue production backlog (applies when demand_source = production_orders): open orders (RELEASED / IN_PROGRESS) planned on or before the as-of date are still owed and fall due on as-of + 1, for their full order_qty (hourly production cannot show what is already built). exclude = count only orders planned after as-of.",
+    "value": {
+      "overdue_backlog": "as_of_plus_1"
+    },
+    "owner_question": "All open production orders are dated before the data date. Are they still to be built (backlog), and should their full quantity count as demand?"
+  }
+]

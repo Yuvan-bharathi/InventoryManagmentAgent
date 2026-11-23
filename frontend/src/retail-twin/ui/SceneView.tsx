@@ -1,0 +1,285 @@
+import { useEffect, useRef, useState } from 'react'
+import { PutawayWalker } from '../inbound/walker'
+import { WarehouseScene, type SceneHover } from '../scene/WarehouseScene'
+import { dockActivityOf } from '../simulation/dockActivity'
+import { useAppStore } from '../store/useAppStore'
+import { DockHoverCard } from './DockHoverCard'
+import { HandControlPanel } from './HandControlPanel'
+import { Inspector } from './Inspector'
+
+/** Pushing a loaded pallet is slower than walking a pick round. */
+const PUTAWAY_PACE = 0.78
+
+/**
+ * Hosts the WebGL canvas and owns the single animation frame loop.
+ *
+ * Order per frame: advance the simulation -> push agent state into the scene ->
+ * render. React state is only touched by the throttled metrics publisher, so a
+ * heavy dashboard re-render can never stutter the 3D view.
+ */
+export function SceneView() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const sceneRef = useRef<WarehouseScene | null>(null)
+
+  const model = useAppStore((s) => s.model)
+  const status = useAppStore((s) => s.status)
+  /**
+   * What the pointer is over. Local state, not the store: a hover is a property
+   * of this canvas and nothing outside it needs to re-render when it changes.
+   */
+  const [hover, setHover] = useState<SceneHover>(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const scene = new WarehouseScene(
+      container,
+      {
+        onSelect: (selection) => useAppStore.getState().setSelection(selection),
+        onHover: setHover,
+      },
+      useAppStore.getState().theme,
+    )
+    sceneRef.current = scene
+
+    // Ensure immediate resize to the rendered container dimensions
+    requestAnimationFrame(() => scene.resize())
+    window.setTimeout(() => scene.resize(), 60)
+
+    // Dev-only handle for poking at the twin from the console / a test driver.
+    if (import.meta.env.DEV) {
+      ;(window as unknown as Record<string, unknown>).__digitalTwinWMS = { scene, store: useAppStore }
+    }
+
+    let raf = 0
+    let last = performance.now()
+    let metricsAccumulator = 0
+    /**
+     * The putaway operator lives outside the engine on purpose: inbound work is
+     * commissioned by hand and has to run on a paused twin too. It is ticked
+     * here so it shares the render clock with everything else on the floor.
+     */
+    let walker: PutawayWalker | null = null
+    let walkerBinId: string | null = null
+
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop)
+      const rawDt = (now - last) / 1000
+      last = now
+      // Skip giant leaps after background tab switch or device sleep
+      if (rawDt > 0.35) return
+
+      const dt = Math.min(Math.max(rawDt, 0.001), 0.05)
+
+      const state = useAppStore.getState()
+
+      const run = state.placementRun
+      if (run && !walker) {
+        walkerBinId = run.plan.chosenBinId
+        walker = new PutawayWalker(run.plan.route, {
+          speed: state.settings.pickerSpeed * PUTAWAY_PACE,
+          // Long enough to read as work being done, short enough not to stall.
+          handleSec: 6,
+          onArrive: () => useAppStore.getState().completePlacement(),
+          onFinish: () => useAppStore.getState().endPlacementRun(),
+        })
+      } else if (!run && walker) {
+        walker = null
+        walkerBinId = null
+      }
+
+      if (walker) {
+        walker.advance(dt * state.timeScale)
+        scene.syncPutawayWalker(walker.state, dt, walkerBinId ?? undefined)
+      } else {
+        scene.syncPutawayWalker(null, dt)
+      }
+
+      const engine = state.engine
+      if (engine) {
+        engine.advance(dt, state.timeScale)
+        scene.frame(dt, engine.agents, {
+          parcels: engine.parcels,
+          stations: engine.packStations,
+          speed: state.settings.conveyorSpeed,
+        })
+
+      } else {
+        scene.frame(dt, [])
+      }
+
+      // Publish at ~8 Hz; enough for a live dashboard, cheap for React. The
+      // walker rides the same tick so the progress bar never drives a re-render
+      // per frame.
+      metricsAccumulator += dt
+      if (metricsAccumulator >= 0.125) {
+        metricsAccumulator = 0
+        if (engine) state.publishMetrics()
+        if (walker) state.publishWalker(walker.state)
+        /*
+         * Dock doors ride the metrics tick rather than the frame.
+         *
+         * Read *after* the publish, so the boards on the doors are drawn from the
+         * same snapshot the dashboard is showing — a door claiming a parcel count
+         * the panel beside it disagrees with would be worse than no board at all.
+         * The shutters and lamps interpolate on their own clock in `frame`.
+         */
+        const published = useAppStore.getState()
+        scene.syncDocks(
+          dockActivityOf(published.model, published.metrics, published.receipts),
+        )
+      }
+    }
+    raf = requestAnimationFrame(loop)
+
+    // Keep the scene in sync with UI-owned view options.
+    const unsubscribe = useAppStore.subscribe((s, prev) => {
+      if (s.model !== prev.model && s.model) scene.setModel(s.model)
+      if (
+        s.showPaths !== prev.showPaths ||
+        s.showSequence !== prev.showSequence ||
+        s.showParcels !== prev.showParcels ||
+        s.showOccupancy !== prev.showOccupancy ||
+        s.showReserve !== prev.showReserve ||
+        s.binColorMode !== prev.binColorMode ||
+        s.focusAgentId !== prev.focusAgentId
+      ) {
+        scene.setOptions({
+          showPaths: s.showPaths,
+          showSequence: s.showSequence,
+          showParcels: s.showParcels,
+          showOccupancy: s.showOccupancy,
+          showReserve: s.showReserve,
+          binColorMode: s.binColorMode,
+          focusAgentId: s.focusAgentId,
+        })
+      }
+      if (s.theme !== prev.theme) scene.setTheme(s.theme)
+      // On-hand levels moved facility-wide (a shift reset restoring opening
+      // stock, a putaway landing). Locations are drawn at the height of what is
+      // in them, so the racking has to be re-read.
+      if (s.stockVersion !== prev.stockVersion) scene.refreshStockLevels()
+      if (s.selection !== prev.selection) scene.setSelection(s.selection)
+      if (s.cameraPreset !== prev.cameraPreset) scene.applyPreset(s.cameraPreset)
+      if (s.deadStockHighlight !== prev.deadStockHighlight) scene.setDeadStockHighlight(s.deadStockHighlight)
+      if (s.leftOpen !== prev.leftOpen) {
+        // Smoothly resize 3D viewport as drawer slides in/out so the twin stays centered
+        window.setTimeout(() => scene.resize(), 60)
+        window.setTimeout(() => scene.resize(), 160)
+        window.setTimeout(() => scene.resize(), 300)
+      }
+      if (s.locateTrigger !== prev.locateTrigger && s.locateTargetBinId) {
+        if (s.locateRoute) {
+          scene.setPutawayRoute(s.locateRoute, [{ binId: s.locateTargetBinId, chosen: true }])
+        }
+        scene.focusBin(s.locateTargetBinId)
+      }
+
+      // Inbound roadmap: draw the walk to the free location and fly to it, so
+      // the plan on the left is the thing you are looking at in the scene.
+      if (s.putawayPlan !== prev.putawayPlan) {
+        const plan = s.putawayPlan
+        scene.setPutawayRoute(
+          plan?.route ?? null,
+          plan?.candidates.map((c) => ({ binId: c.binId, chosen: c.binId === plan.chosenBinId })) ??
+            [],
+        )
+        if (plan && plan.chosenBinId !== prev.putawayPlan?.chosenBinId) {
+          scene.setSelection({ kind: 'bin', id: plan.chosenBinId })
+          scene.frameRoute(plan.route)
+        }
+      }
+
+      // A confirmed putaway physically changes a shelf, so the scene has to be
+      // told — the bin palettes are baked and would otherwise show the old SKU.
+      if (s.lastPlacement !== prev.lastPlacement) {
+        if (s.lastPlacement) scene.markPlaced(s.lastPlacement.binId)
+        else if (!s.putawayPlan) scene.setPutawayRoute(null)
+      }
+      if (s.leftOpen !== prev.leftOpen || s.rightOpen !== prev.rightOpen) {
+        // Panel transition is 300ms; resize once it has settled without forcibly snapping camera preset.
+        window.setTimeout(() => {
+          scene.resize()
+        }, 320)
+      }
+    })
+
+    const initial = useAppStore.getState()
+    if (initial.model) scene.setModel(initial.model)
+    scene.setOptions({
+      showPaths: initial.showPaths,
+      showSequence: initial.showSequence,
+      showParcels: initial.showParcels,
+      showOccupancy: initial.showOccupancy,
+      showReserve: initial.showReserve,
+      binColorMode: initial.binColorMode,
+      focusAgentId: initial.focusAgentId,
+    })
+
+    return () => {
+      cancelAnimationFrame(raf)
+      unsubscribe()
+      scene.dispose()
+      sceneRef.current = null
+    }
+  }, [])
+
+  // A layout switch happens before the subscriber above can see it on mount.
+  useEffect(() => {
+    if (model && sceneRef.current) sceneRef.current.setModel(model)
+  }, [model])
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative h-full w-full"
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        minHeight: '100%',
+        overflow: 'hidden',
+        display: 'block',
+      }}
+    >
+      {status === 'loading' && (
+        <div
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-ink-950"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            background: '#F1F5F9',
+          }}
+        >
+          <div
+            className="h-8 w-8 animate-spin rounded-full border-2 border-ink-700 border-t-accent"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              border: '3px solid #CBD5E1',
+              borderTopColor: '#2563EB',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <p className="text-xs text-ink-400" style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+            Generating warehouse & navigation graph…
+          </p>
+        </div>
+      )}
+      <DockHoverCard sceneRef={sceneRef} hover={hover} />
+      <Inspector sceneRef={sceneRef} />
+
+      <div className="absolute right-4 top-4 z-20">
+        <HandControlPanel sceneRef={sceneRef} />
+      </div>
+    </div>
+  )
+}

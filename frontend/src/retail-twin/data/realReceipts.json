@@ -1,0 +1,128 @@
+{
+  "receipts": [
+    {
+      "ref": "GRN-61-Aug26B01",
+      "po": "GRN-61-Aug26B01",
+      "supplier": "Qualcomm Technologies",
+      "unplanned": false,
+      "lines": [
+        {
+          "skuId": "MAT-SOC-001",
+          "name": "Application Processor SoC Snapdragon 8 Gen 2",
+          "category": "Active Semiconductor",
+          "unitVolume": 0.5,
+          "expectedQty": 500
+        },
+        {
+          "skuId": "MAT-PMIC-019",
+          "name": "Qualcomm PM8350 Power Management IC",
+          "category": "Active Semiconductor",
+          "unitVolume": 0.3,
+          "expectedQty": 500
+        },
+        {
+          "skuId": "MAT-MODEM-020",
+          "name": "5G Snapdragon X70 Modem RF Chip",
+          "category": "Active Semiconductor",
+          "unitVolume": 0.3,
+          "expectedQty": 300
+        }
+      ]
+    },
+    {
+      "ref": "GRN-62-Aug26B02",
+      "po": "GRN-62-Aug26B02",
+      "supplier": "Samsung Semiconductor",
+      "unplanned": false,
+      "lines": [
+        {
+          "skuId": "MAT-MEM-002",
+          "name": "LPDDR5 Memory IC 8GB High-Speed",
+          "category": "Memory & Storage",
+          "unitVolume": 0.3,
+          "expectedQty": 800
+        },
+        {
+          "skuId": "MAT-NAND-003",
+          "name": "UFS 3.1 Flash Storage IC 128GB",
+          "category": "Memory & Storage",
+          "unitVolume": 0.3,
+          "expectedQty": 600
+        }
+      ]
+    },
+    {
+      "ref": "GRN-63-Aug26B03",
+      "po": "GRN-63-Aug26B03",
+      "supplier": "BOE Display Technology",
+      "unplanned": false,
+      "lines": [
+        {
+          "skuId": "MAT-DSP-005",
+          "name": "6.5in 120Hz AMOLED Display Module",
+          "category": "Display Modules",
+          "unitVolume": 2.5,
+          "expectedQty": 300
+        }
+      ]
+    },
+    {
+      "ref": "GRN-64-Aug26B04",
+      "po": "GRN-64-Aug26B04",
+      "supplier": "Murata Manufacturing",
+      "unplanned": false,
+      "lines": [
+        {
+          "skuId": "MAT-CAP-032",
+          "name": "0402 SMD Multilayer Ceramic Cap 10uF",
+          "category": "Passive Components",
+          "unitVolume": 0.1,
+          "expectedQty": 5000
+        },
+        {
+          "skuId": "MAT-RES-033",
+          "name": "0201 Precision Thick Film Resistor 100k",
+          "category": "Passive Components",
+          "unitVolume": 0.1,
+          "expectedQty": 5000
+        },
+        {
+          "skuId": "MAT-IND-034",
+          "name": "Shielded SMT Power Inductor 2.2uH",
+          "category": "Passive Components",
+          "unitVolume": 0.2,
+          "expectedQty": 2000
+        }
+      ]
+    },
+    {
+      "ref": "GRN-65-Aug26B05",
+      "po": "GRN-65-Aug26B05",
+      "supplier": "Foxconn Precision Components",
+      "unplanned": false,
+      "lines": [
+        {
+          "skuId": "MAT-PCB-004",
+          "name": "6-layer High-Density Main PCB",
+          "category": "Printed Circuit Board",
+          "unitVolume": 1.2,
+          "expectedQty": 400
+        },
+        {
+          "skuId": "MAT-HSG-009",
+          "name": "Aluminium Mid-frame CNC Chassis",
+          "category": "Mechanical Enclosure",
+          "unitVolume": 1.8,
+          "expectedQty": 350
+        },
+        {
+          "skuId": "MAT-BACK-029",
+          "name": "AG Frosted Glass Back Cover Panel",
+          "category": "Mechanical Enclosure",
+          "unitVolume": 1.5,
+          "expectedQty": 350
+        }
+      ]
+    }
+  ]
+}

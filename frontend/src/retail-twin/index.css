@@ -1,0 +1,352 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * ── Design tokens ───────────────────────────────────────────────────────────
+ *
+ * `--ink-N` is a BACKGROUND → FOREGROUND ramp, not a luminance ramp:
+ *   950 page plane · 900 chrome · 850/800 card · 750 hover
+ *   700/600 hairlines · 500/400/300 muted→secondary text · 200/100 primary text
+ * In light mode it runs light→dark; in dark mode dark→light. Every component
+ * is written against the ramp position, so both themes come from one set of
+ * classes and nothing has to be restyled per mode.
+ *
+ * `--accent-soft` is likewise the *foreground* accent: darker than `--accent`
+ * on light, lighter on dark, so `text-accent-soft` is always readable.
+ *
+ * Chart series colours live in src/ui/theme.ts, where the validator commands
+ * that signed off each mode's palette are recorded.
+ */
+/*
+ * Ramp colours are stored as space-separated RGB CHANNELS, not hex, so Tailwind
+ * can inject `<alpha-value>` and every `bg-ink-800/95`-style modifier works.
+ * Read them directly as `rgb(var(--ink-800))` / `rgb(var(--accent) / 0.1)`.
+ */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --ink-950: 238 241 245; /* page plane — sealed-concrete grey */
+  --ink-900: 255 255 255; /* app chrome */
+  --ink-850: 246 248 250; /* sunken well inside a card */
+  --ink-800: 255 255 255; /* card surface */
+  --ink-750: 241 244 248; /* hover / raised */
+  --ink-700: 221 227 234; /* hairline */
+  --ink-600: 200 209 219; /* stronger border */
+  --ink-500: 148 162 179;
+  --ink-400: 107 122 141; /* muted text */
+  --ink-300: 76 90 107; /* secondary text */
+  --ink-200: 27 36 48; /* primary text */
+  --ink-100: 15 22 32;
+
+  --tw-accent: 111 61 186; /* Brand purple #6f3dba */
+  --tw-accent-soft: 91 33 182; /* Deep purple #5b21b6 */
+  --tw-accent-deep: 243 238 255; /* Soft brand purple #f3eeff */
+  --tw-on-accent: 255 255 255;
+
+  --viz-good: #0ca30c;
+  --viz-warning: #b8860b;
+  --viz-critical: #d03b3b;
+  --viz-series-1: #2a78d6;
+  --viz-series-2: #eb6834;
+  --viz-series-3: #1baf7a;
+  --good-rgb: 12 163 12;
+  --warn-rgb: 184 134 11;
+  --crit-rgb: 208 59 59;
+
+  --shadow-panel: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-float: 0 12px 32px -8px rgba(16, 24, 40, 0.22), 0 2px 6px rgba(16, 24, 40, 0.08);
+  --scrollbar: #c8d1db;
+  --scrollbar-hover: #a9b6c4;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: light;
+
+  --ink-950: 238 241 245; /* page plane — sealed-concrete grey */
+  --ink-900: 255 255 255; /* app chrome */
+  --ink-850: 246 248 250; /* sunken well inside a card */
+  --ink-800: 255 255 255; /* card surface */
+  --ink-750: 241 244 248; /* hover / raised */
+  --ink-700: 221 227 234; /* hairline */
+  --ink-600: 200 209 219; /* stronger border */
+  --ink-500: 148 162 179;
+  --ink-400: 107 122 141; /* muted text */
+  --ink-300: 76 90 107; /* secondary text */
+  --ink-200: 27 36 48; /* primary text */
+  --ink-100: 15 22 32;
+
+  --tw-accent: 111 61 186; /* Brand purple #6f3dba */
+  --tw-accent-soft: 91 33 182; /* Deep purple #5b21b6 */
+  --tw-accent-deep: 243 238 255; /* Soft brand purple #f3eeff */
+  --tw-on-accent: 255 255 255;
+
+  --viz-good: #0ca30c;
+  --viz-warning: #b8860b;
+  --viz-critical: #d03b3b;
+  --viz-series-1: #2a78d6;
+  --viz-series-2: #eb6834;
+  --viz-series-3: #1baf7a;
+  --good-rgb: 12 163 12;
+  --warn-rgb: 184 134 11;
+  --crit-rgb: 208 59 59;
+
+  --shadow-panel: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-float: 0 12px 32px -8px rgba(16, 24, 40, 0.22), 0 2px 6px rgba(16, 24, 40, 0.08);
+  --scrollbar: #c8d1db;
+  --scrollbar-hover: #a9b6c4;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 8px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  select,
+  input,
+  textarea,
+  button {
+    font-family: inherit;
+  }
+
+  input[type='range'] {
+    @apply h-1 w-full appearance-none rounded-full bg-ink-600;
+    outline: none;
+  }
+  input[type='range']::-webkit-slider-thumb {
+    @apply h-3.5 w-3.5 appearance-none rounded-full;
+    background: rgb(var(--tw-accent));
+    box-shadow: 0 0 0 3px rgb(var(--tw-accent) / 0.16);
+    cursor: pointer;
+    transition: box-shadow 140ms ease;
+  }
+  input[type='range']::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 0 5px rgb(var(--tw-accent) / 0.24);
+  }
+  input[type='range']::-moz-range-thumb {
+    @apply h-3.5 w-3.5 rounded-full border-0;
+    background: rgb(var(--tw-accent));
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  /*
+   * A card: an opaque surface with a real edge, sitting on the rail's plane.
+   *
+   * Was translucent (`bg-ink-800/40` over a backdrop blur) with a heavy drop
+   * shadow, which made every card pick up whatever was behind it and left the
+   * small print they are mostly made of sitting on an unpredictable ground.
+   * Opaque fill + hairline + a shadow you can barely name reads as a stack of
+   * distinct objects, which is the whole job of a card.
+   */
+  .panel {
+    @apply rounded-xl border border-ink-700 bg-ink-800;
+    box-shadow: var(--shadow-panel);
+  }
+  /*
+   * The two side rails: a plain recessed plane, nothing more.
+   *
+   * They used to carry a vertical gradient and an accent glow bleeding into
+   * the 3D view. With opaque cards on top, that depth was doing no work — the
+   * cards already separate themselves — and the glow tinted the edge of the
+   * canvas, which is the one surface in the app that should be showing the
+   * warehouse's own colours and not the chrome's.
+   */
+  .rail {
+    background: rgb(var(--ink-950));
+  }
+  .rail-left {
+    border-right: 1px solid rgb(var(--ink-700));
+  }
+  .rail-right {
+    border-left: 1px solid rgb(var(--ink-700));
+  }
+
+  /* Floating overlays sit on the 3D canvas and need to stay legible over it. */
+  .panel-float {
+    @apply rounded-xl border border-ink-600 bg-ink-800/95 backdrop-blur-md;
+    box-shadow: var(--shadow-float);
+  }
+  /*
+   * A card's header reads as a distinct band rather than a rule with text
+   * above it: the tint separates it from the body without another hairline,
+   * and it is what makes a column of cards scan as a stack of objects instead
+   * of one continuous wall of text.
+   */
+  .panel-header {
+    @apply flex items-center justify-between gap-2 rounded-t-xl border-b border-ink-700
+           bg-ink-850 px-3.5 py-2.5;
+  }
+  /*
+   * Titles carry a short accent rule. Panels are the only landmark in a 340px
+   * rail with no other structure, so they need to be findable while scrolling
+   * without shouting — a 2px mark reads at a glance and costs no vertical
+   * space, where a heavier treatment on every card would just become noise.
+   */
+  .panel-title {
+    @apply relative flex items-center gap-2 pl-2.5 text-[11px] font-semibold uppercase
+           tracking-[0.13em] text-ink-300;
+  }
+  .panel-title::before {
+    content: '';
+    @apply absolute left-0 h-3 w-[2px] rounded-full;
+    background: linear-gradient(to bottom, rgb(var(--tw-accent)), rgb(var(--tw-accent) / 0.25));
+  }
+  /*
+   * Small caption sitting directly above a bigger value — the shift clock,
+   * a metrics chip, a card's kind label. Was three near-identical one-offs
+   * (9px / 9.5px / 10px, one of them also adding font-medium) that drifted
+   * apart across TopBar/SimulationControls/Inspector despite being the same
+   * role everywhere; one class so the next one doesn't drift again either.
+   */
+  .mini-label {
+    @apply text-[9.5px] uppercase tracking-[0.12em] text-ink-400;
+  }
+  .retail-twin-scope .btn,
+  .rail .btn,
+  .panel .btn {
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-lg border border-ink-600 bg-ink-800
+           px-3 py-1.5 text-xs font-medium text-ink-300 transition-all duration-150
+           hover:border-ink-500 hover:bg-ink-750 hover:text-ink-100
+           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent
+           disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-ink-800;
+  }
+  /*
+   * Solid, not a tint. The primary action in a panel — Run simulation, Confirm
+   * putaway — was a 10%-alpha accent wash that only filled in on hover, so at
+   * rest it sat at almost the same weight as the secondary button beside it and
+   * the eye had to hunt for the thing it was meant to press first.
+   */
+  .retail-twin-scope .btn-primary,
+  .panel .btn-primary {
+    border-color: rgb(var(--tw-accent));
+    background: rgb(var(--tw-accent));
+    color: rgb(var(--tw-on-accent));
+    box-shadow: 0 1px 2px rgb(var(--tw-accent) / 0.32);
+  }
+  .retail-twin-scope .btn-primary:hover:not(:disabled),
+  .panel .btn-primary:hover:not(:disabled) {
+    border-color: rgb(var(--tw-accent-soft));
+    background: rgb(var(--tw-accent-soft));
+    color: rgb(var(--tw-on-accent));
+  }
+  .btn-icon {
+    @apply h-8 w-8 rounded-full p-0;
+  }
+  /* Taller button for the primary action of a block. Size only — the caller
+     owns the width, so it works both full-width and as a flex row item. */
+  .btn-lg {
+    @apply py-2 text-[12.5px];
+  }
+  /*
+   * One option in a row of equal-weight choices (playback speed, filters).
+   * Distinct from `.btn` because the row is a single control: the selected one
+   * has to read as *chosen*, not merely hovered.
+   */
+  .seg-option {
+    @apply flex-1 rounded-lg border border-ink-700 bg-ink-800 py-1.5 text-[11px] font-semibold
+           text-ink-400 transition-colors duration-150
+           hover:border-ink-600 hover:text-ink-100
+           focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent;
+  }
+  .seg-option-active {
+    border-color: rgb(var(--tw-accent));
+    background: rgb(var(--tw-accent) / 0.08);
+    color: rgb(var(--tw-accent-soft));
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md border border-ink-700 bg-ink-850 px-1.5 py-0.5
+           text-[10px] font-medium uppercase tracking-wider text-ink-400;
+  }
+  .field-label {
+    @apply flex items-baseline justify-between text-[11px] font-medium text-ink-300;
+  }
+  .field-value {
+    @apply font-mono text-[11px] tabular-nums text-accent-soft;
+  }
+  /*
+   * Headline numbers are the one place this interface should feel expensive.
+   * Tabular figures so a counter ticking up doesn't jitter its own width, and
+   * a very slight negative tracking that stops large numerals looking loose.
+   */
+  .stat-value {
+    @apply text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums text-ink-100;
+  }
+  .stat-label {
+    @apply text-[10px] font-medium uppercase tracking-[0.11em] text-ink-400;
+  }
+  /* Fades out at both ends rather than butting into the card's padding. */
+  .divider {
+    @apply my-3 h-px border-0;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgb(var(--ink-600)) 15%,
+      rgb(var(--ink-600)) 85%,
+      transparent
+    );
+  }
+  /* Selected state for the card-style option lists. */
+  .option-active {
+    border-color: rgb(var(--tw-accent) / 0.45);
+    background: rgb(var(--tw-accent) / 0.1);
+    box-shadow: inset 0 0 0 1px rgb(var(--tw-accent) / 0.3);
+  }
+  /* Keyboard key, for the on-canvas control legend. */
+  .kbd {
+    @apply inline-flex min-w-[1.15rem] items-center justify-center rounded border border-ink-600 bg-ink-850
+           px-1 py-px font-mono text-[9px] font-semibold leading-[1.35] text-ink-200;
+    box-shadow: 0 1px 0 rgb(var(--ink-600));
+  }
+  /* Translucent status pills — status hues are fixed and never themed. */
+  .pill-good {
+    border-color: rgb(var(--good-rgb) / 0.45);
+    background: rgb(var(--good-rgb) / 0.1);
+    color: var(--viz-good);
+  }
+}
+
+/* Recharts chrome — recessive grid, muted ticks, no default focus ring. */
+.recharts-cartesian-axis-tick text {
+  fill: rgb(var(--ink-400));
+  font-size: 10px;
+}
+.recharts-cartesian-grid line {
+  stroke: rgb(var(--ink-700));
+}
+.recharts-surface:focus {
+  outline: none;
+}
+
+/* Enforce Enterprise Brand Font & Styling */
+.retail-twin-scope,
+.retail-twin-scope * {
+  font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+}
