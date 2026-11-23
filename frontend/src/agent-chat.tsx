@@ -2,7 +2,7 @@
 // Used by the side panel and the Agent Workspace page.
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { token } from './api'
+import { token, API_BASE } from './api'
 import { useShell } from './shell-context'
 import { MarkdownView } from './components/MarkdownView'
 
@@ -22,7 +22,7 @@ export const SUGGESTED = [
 
 /** One question, no UI: used by the Manual Trigger workflow run. */
 export async function askOnce(question: string, context: Record<string, unknown>): Promise<Answer> {
-  const r = await fetch('/api/agent/chat', {
+  const r = await fetch(`${API_BASE}/api/agent/chat`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.get()}` },
     body: JSON.stringify({ question, context }),
   })
@@ -42,7 +42,7 @@ export function useAgentChat() {
     setMsgs((m) => [...m, { role: 'user', text: q, at: Date.now() }, { role: 'bot', text: '', at: Date.now() }])
     setBusy(true)
     try {
-      const r = await fetch('/api/agent/chat/stream', {
+      const r = await fetch(`${API_BASE}/api/agent/chat/stream`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.get()}` },
         body: JSON.stringify({ question: q, context: { page: agentCtx.page, plant: plant || null, item: agentCtx.item ?? null } }),
       })

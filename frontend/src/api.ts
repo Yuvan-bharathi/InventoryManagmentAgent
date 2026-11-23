@@ -24,12 +24,20 @@ export const token = {
   set: (t: string | null) => { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY) } catch { /* ignore */ } },
 }
 
+export const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+
+function resolveUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `${API_BASE}${url}`
+}
+
 async function request<T>(method: string, url: string, body?: unknown, isForm = false): Promise<T> {
   const headers: Record<string, string> = {}
   const t = token.get()
   if (t) headers.Authorization = `Bearer ${t}`
   if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
-  const r = await fetch(url, { method, headers, body: isForm ? (body as FormData) : body === undefined ? undefined : JSON.stringify(body) })
+  const fullUrl = resolveUrl(url)
+  const r = await fetch(fullUrl, { method, headers, body: isForm ? (body as FormData) : body === undefined ? undefined : JSON.stringify(body) })
   if (r.status === 401 && t) { token.set(null); window.location.assign('/login') }
   if (!r.ok) {
     let msg = r.statusText
@@ -54,7 +62,8 @@ export function qs(params: Record<string, string | number | undefined | null>): 
 }
 
 export async function download(url: string, filename: string) {
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${token.get() ?? ''}` } })
+  const fullUrl = resolveUrl(url)
+  const r = await fetch(fullUrl, { headers: { Authorization: `Bearer ${token.get() ?? ''}` } })
   if (!r.ok) throw new ApiError(r.status, r.statusText)
   const blob = await r.blob()
   const a = document.createElement('a')

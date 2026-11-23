@@ -1,6 +1,7 @@
 """FastAPI application. Run: uvicorn app.main:app --reload (from backend/)."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -15,8 +16,31 @@ from app.config import REPO_ROOT
 
 app = FastAPI(title="Inventory Management Agent (Agent 09)", version="0.3")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"],
-                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+cors_env = os.getenv("CORS_ORIGINS", "").strip()
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
+if cors_env:
+    if cors_env == "*":
+        allowed_origins = ["*"]
+    else:
+        for origin in cors_env.split(","):
+            cleaned = origin.strip()
+            if cleaned and cleaned not in allowed_origins:
+                allowed_origins.append(cleaned)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app" if cors_env != "*" else None,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 for r in (routes_data.router, routes_inventory.router, routes_proposals.router, routes_intelligence.router, routes_mcp.router, routes_connectors.router, routes_warehouse.router, routes_integration.router):
     app.include_router(r)
 
