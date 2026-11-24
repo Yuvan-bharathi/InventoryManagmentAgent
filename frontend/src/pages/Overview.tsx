@@ -10,9 +10,6 @@ import {
   PieChart,
   Line,
   LineChart,
-  Scatter,
-  ScatterChart,
-  ZAxis,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -376,6 +373,10 @@ export function Overview() {
     activeAct: 'all',
   })
 
+  // View state for Chart 4: Days of Supply Matrix
+  const [matrixView, setMatrixView] = useState<'bars' | 'matrix'>('bars')
+  const [matrixFilter, setMatrixFilter] = useState<'all' | 'shortage' | 'healthy' | 'excess'>('all')
+
   // Synchronize shell plant with local filter
   useEffect(() => {
     if (shellPlant && shellPlant !== filters.plant) {
@@ -451,18 +452,62 @@ export function Overview() {
     ].filter((d) => d.value > 0)
   }, [filteredMaterials])
 
-  // ─── Scatter Plot Data: Days of Cover vs Stock Value ─────────────────────
-  const scatterPlotData = useMemo(() => {
-    return filteredMaterials.map((m) => ({
-      name: m.name,
-      id: m.id,
-      category: m.category,
-      daysOfCover: m.daysOfCover,
-      stockValueLakhs: m.stockValueLakhs,
-      unitCost: m.unitCost,
-      status: m.status,
-      ordersAffected: m.ordersAffected,
-    }))
+  // ─── Supply Duration & Capital Matrix Data ─────────────────────────────
+  const supplyMatrixData = useMemo(() => {
+    let list = filteredMaterials.map((m) => {
+      let tier: 'shortage' | 'at_risk' | 'healthy' | 'excess' = 'healthy'
+      let tierLabel = 'Optimal Buffer'
+      let color = '#10b981'
+      if (m.daysOfCover < 20) {
+        tier = 'shortage'
+        tierLabel = 'Critical Shortage (<20d)'
+        color = '#ef4444'
+      } else if (m.daysOfCover <= 35) {
+        tier = 'at_risk'
+        tierLabel = 'Tight Buffer (20–35d)'
+        color = '#f59e0b'
+      } else if (m.daysOfCover > 60) {
+        tier = 'excess'
+        tierLabel = 'Trapped Capital (>60d)'
+        color = '#8b5cf6'
+      }
+      return {
+        name: m.name.length > 20 ? m.name.slice(0, 18) + '…' : m.name,
+        fullName: m.name,
+        id: m.id,
+        category: m.category,
+        daysOfCover: m.daysOfCover,
+        stockValueLakhs: m.stockValueLakhs,
+        unitCost: m.unitCost,
+        tier,
+        tierLabel,
+        color,
+        status: m.status,
+        proposedAction: m.proposedAction,
+      }
+    })
+
+    if (matrixFilter === 'shortage') list = list.filter((d) => d.daysOfCover <= 35)
+    else if (matrixFilter === 'healthy') list = list.filter((d) => d.daysOfCover > 35 && d.daysOfCover <= 60)
+    else if (matrixFilter === 'excess') list = list.filter((d) => d.daysOfCover > 60)
+
+    return list.sort((a, b) => a.daysOfCover - b.daysOfCover).slice(0, 7)
+  }, [filteredMaterials, matrixFilter])
+
+  const matrixQuadrants = useMemo(() => {
+    const shortage = filteredMaterials.filter((m) => m.daysOfCover < 20)
+    const atRisk = filteredMaterials.filter((m) => m.daysOfCover >= 20 && m.daysOfCover <= 35)
+    const healthy = filteredMaterials.filter((m) => m.daysOfCover > 35 && m.daysOfCover <= 60)
+    const excess = filteredMaterials.filter((m) => m.daysOfCover > 60)
+
+    const sumVal = (arr: typeof filteredMaterials) => arr.reduce((acc, m) => acc + m.stockValueLakhs, 0).toFixed(1)
+
+    return {
+      shortage: { items: shortage, totalValue: sumVal(shortage) },
+      atRisk: { items: atRisk, totalValue: sumVal(atRisk) },
+      healthy: { items: healthy, totalValue: sumVal(healthy) },
+      excess: { items: excess, totalValue: sumVal(excess) },
+    }
   }, [filteredMaterials])
 
   return (
@@ -1142,7 +1187,7 @@ export function Overview() {
           </div>
         </div>
 
-        {/* Chart 4: Inventory ABC-XYZ Valuation vs Days of Supply Matrix (Scatter Chart) */}
+        {/* Chart 4: Days of Supply & Capital Valuation Matrix (Ranked Bars & 4-Quadrant View) */}
         <div
           style={{
             background: '#ffffff',
@@ -1154,82 +1199,260 @@ export function Overview() {
             flexDirection: 'column',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
-                Inventory Valuation vs Days of Supply Matrix
+                Days of Supply &amp; Capital Valuation Matrix
               </div>
               <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-                Scatter positioning: High-value shortages (top-left) vs Trapped E&amp;O capital (top-right)
+                Critical Shortages (&lt;20d) vs Balanced Buffer (20–60d) vs Trapped Capital (&gt;60d)
               </div>
             </div>
-            <span style={{ fontSize: 10, fontWeight: 700, background: '#fef2f2', color: '#ef4444', padding: '3px 8px', borderRadius: 6 }}>
-              ABC-XYZ SCATTER
-            </span>
-          </div>
 
-          <div style={{ height: 260 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
-                <XAxis
-                  type="number"
-                  dataKey="daysOfCover"
-                  name="Days of Cover"
-                  unit="d"
-                  tick={AXIS}
-                  domain={[0, 130]}
-                  label={{ value: 'Days of Cover (DoH)', position: 'insideBottomRight', offset: -5, fontSize: 10, fill: '#9ca3af' }}
-                />
-                <YAxis
-                  type="number"
-                  dataKey="stockValueLakhs"
-                  name="Stock Value"
-                  unit="L"
-                  tick={AXIS}
-                  domain={[0, 100]}
-                  label={{ value: 'Stock Value (₹ Lakhs)', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#9ca3af' }}
-                />
-                <ZAxis type="number" dataKey="unitCost" range={[60, 320]} name="Unit Price" />
-                <Tooltip
-                  cursor={{ strokeDasharray: '3 3' }}
-                  content={({ payload }) => {
-                    if (!payload || !payload.length) return null
-                    const d = payload[0].payload
-                    return (
-                      <div style={{ ...TIP, padding: '10px 12px' }}>
-                        <div style={{ fontWeight: 700, color: '#111827' }}>{d.name}</div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>ID: {d.id} • {d.category}</div>
-                        <div style={{ fontSize: 12, color: '#7c3aed' }}>Days of Cover: <b>{d.daysOfCover} days</b></div>
-                        <div style={{ fontSize: 12, color: '#111827' }}>Stock Valuation: <b>₹{d.stockValueLakhs} Lakhs</b></div>
-                        <div style={{ fontSize: 11, color: '#4b5563' }}>Unit Price: ₹{d.unitCost} / EA</div>
-                      </div>
-                    )
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* View Switcher: Bars vs 4-Quadrant Matrix */}
+              <div style={{ display: 'inline-flex', background: '#f3f4f6', borderRadius: 7, padding: 2 }}>
+                <button
+                  type="button"
+                  onClick={() => setMatrixView('bars')}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: 5,
+                    border: 'none',
+                    background: matrixView === 'bars' ? '#ffffff' : 'transparent',
+                    color: matrixView === 'bars' ? '#111827' : '#6b7280',
+                    fontWeight: matrixView === 'bars' ? 700 : 500,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    boxShadow: matrixView === 'bars' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
                   }}
-                />
-                <ReferenceLine x={7} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Line Stop (<7d)', fill: '#ef4444', fontSize: 9 }} />
-                <ReferenceLine x={60} stroke="#8b5cf6" strokeDasharray="3 3" label={{ value: 'Excess (>60d)', fill: '#8b5cf6', fontSize: 9 }} />
-                <Scatter data={scatterPlotData}>
-                  {scatterPlotData.map((entry, index) => {
-                    const color =
-                      entry.status === 'critical'
-                        ? '#ef4444'
-                        : entry.status === 'qc_hold'
-                        ? '#06b6d4'
-                        : entry.status === 'excess'
-                        ? '#8b5cf6'
-                        : entry.status === 'at_risk'
-                        ? '#f59e0b'
-                        : '#10b981'
-                    return <Cell key={`scatter-${index}`} fill={color} />
-                  })}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
+                >
+                  <span>📊</span> Ranked Bars
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatrixView('matrix')}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: 5,
+                    border: 'none',
+                    background: matrixView === 'matrix' ? '#ffffff' : 'transparent',
+                    color: matrixView === 'matrix' ? '#111827' : '#6b7280',
+                    fontWeight: matrixView === 'matrix' ? 700 : 500,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    boxShadow: matrixView === 'matrix' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <span>⊞</span> 4-Quadrant Grid
+                </button>
+              </div>
+
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#f5f3ff', color: '#7c3aed', padding: '3px 8px', borderRadius: 6 }}>
+                EXPOSURE MATRIX
+              </span>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 11 }}>
-            <span style={{ color: '#ef4444' }}>🔴 Shortage Risk: 6-Layer Main PCB (18d, ₹9.65L)</span>
-            <span style={{ color: '#8b5cf6' }}>🟣 Trapped Capital: Mid-frame (115d, ₹57.04L)</span>
+          {/* Quick Filter Pill Buttons (Active in Bars View) */}
+          {matrixView === 'bars' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280' }}>Filter Tier:</span>
+              {[
+                { id: 'all', label: 'All SKUs' },
+                { id: 'shortage', label: '🔴 Shortage & Tight (≤35d)' },
+                { id: 'healthy', label: '🟢 Optimal (36–60d)' },
+                { id: 'excess', label: '🟣 Trapped Capital (>60d)' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setMatrixFilter(f.id as any)}
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: 5,
+                    border: matrixFilter === f.id ? '1px solid #7c3aed' : '1px solid #e5e7eb',
+                    background: matrixFilter === f.id ? '#f5f3ff' : '#ffffff',
+                    color: matrixFilter === f.id ? '#7c3aed' : '#4b5563',
+                    fontSize: 10.5,
+                    fontWeight: matrixFilter === f.id ? 700 : 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Content View: Ranked Horizontal Bars */}
+          {matrixView === 'bars' ? (
+            <div style={{ height: 250 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={supplyMatrixData}
+                  layout="vertical"
+                  margin={{ top: 5, right: 35, left: 10, bottom: 0 }}
+                >
+                  <XAxis
+                    type="number"
+                    domain={[0, 130]}
+                    unit="d"
+                    tick={AXIS}
+                    label={{ value: 'Days of Cover (DoH)', position: 'insideBottomRight', offset: -4, fontSize: 10, fill: '#9ca3af' }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={135}
+                    tick={{ fontSize: 10.5, fill: '#374151', fontWeight: 600 }}
+                  />
+                  <Tooltip
+                    content={({ payload }) => {
+                      if (!payload || !payload.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div style={{ ...TIP, padding: '10px 12px', minWidth: 220 }}>
+                          <div style={{ fontWeight: 700, color: '#111827', fontSize: 12.5 }}>{d.fullName}</div>
+                          <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>ID: {d.id} • {d.category}</div>
+                          <div style={{ fontSize: 12, color: d.color, fontWeight: 700 }}>
+                            Days of Supply: {d.daysOfCover} days ({d.tierLabel})
+                          </div>
+                          <div style={{ fontSize: 12, color: '#111827', marginTop: 2 }}>
+                            Stock Valuation: <b>₹{d.stockValueLakhs} Lakhs</b>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#4b5563' }}>Unit Price: ₹{d.unitCost} / EA</div>
+                          {d.proposedAction && (
+                            <div style={{ fontSize: 11, color: '#6d28d9', marginTop: 6, borderTop: '1px solid #e5e7eb', paddingTop: 4 }}>
+                              <b>AI Recommendation:</b> {d.proposedAction}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }}
+                  />
+                  <ReferenceLine x={20} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Shortage (<20d)', fill: '#ef4444', fontSize: 9, position: 'top' }} />
+                  <ReferenceLine x={60} stroke="#8b5cf6" strokeDasharray="3 3" label={{ value: 'Excess (>60d)', fill: '#8b5cf6', fontSize: 9, position: 'top' }} />
+                  <Bar dataKey="daysOfCover" radius={[0, 4, 4, 0]}>
+                    {supplyMatrixData.map((entry, index) => (
+                      <Cell key={`bar-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            /* Content View: 4-Quadrant Decision Grid */
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, height: 250, boxSizing: 'border-box' }}>
+              {/* Q1: Shortage & Line-Stop Risk */}
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '9px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#dc2626' }}>🔴 Critical Shortage (&lt;20d)</span>
+                    <span style={{ fontSize: 10, background: '#fee2e2', color: '#b91c1c', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                      {matrixQuadrants.shortage.items.length} SKUs
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 5 }}>
+                    Line-Stop Exposure: <b style={{ color: '#dc2626' }}>₹{matrixQuadrants.shortage.totalValue}L</b>
+                  </div>
+                  {matrixQuadrants.shortage.items.slice(0, 2).map((item) => (
+                    <div key={item.id} style={{ fontSize: 10.5, fontWeight: 600, color: '#1f2937', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 125 }}>{item.name}</span>
+                      <span style={{ color: '#dc2626', fontWeight: 700 }}>{item.daysOfCover}d</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 9.5, color: '#b91c1c', fontWeight: 600, borderTop: '1px dashed #fca5a5', paddingTop: 4 }}>
+                  ⚡ Action: Expedite PO &amp; Transfer Buffer
+                </div>
+              </div>
+
+              {/* Q2: Trapped Capital & Excess */}
+              <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 8, padding: '9px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#7e22ce' }}>🟣 Trapped Capital (&gt;60d)</span>
+                    <span style={{ fontSize: 10, background: '#f3e8ff', color: '#6b21a8', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                      {matrixQuadrants.excess.items.length} SKUs
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 5 }}>
+                    Tied-up Working Capital: <b style={{ color: '#7e22ce' }}>₹{matrixQuadrants.excess.totalValue}L</b>
+                  </div>
+                  {matrixQuadrants.excess.items.slice(0, 2).map((item) => (
+                    <div key={item.id} style={{ fontSize: 10.5, fontWeight: 600, color: '#1f2937', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 125 }}>{item.name}</span>
+                      <span style={{ color: '#7e22ce', fontWeight: 700 }}>{item.daysOfCover}d</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 9.5, color: '#6b21a8', fontWeight: 600, borderTop: '1px dashed #d8b4fe', paddingTop: 4 }}>
+                  ⚡ Action: Pause PO Release / Reschedule Q1
+                </div>
+              </div>
+
+              {/* Q3: Tight Watchlist Buffer */}
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '9px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#b45309' }}>🟡 Tight Watchlist (20–35d)</span>
+                    <span style={{ fontSize: 10, background: '#fef3c7', color: '#92400e', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                      {matrixQuadrants.atRisk.items.length} SKUs
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 5 }}>
+                    At-Risk Buffer: <b style={{ color: '#b45309' }}>₹{matrixQuadrants.atRisk.totalValue}L</b>
+                  </div>
+                  {matrixQuadrants.atRisk.items.slice(0, 2).map((item) => (
+                    <div key={item.id} style={{ fontSize: 10.5, fontWeight: 600, color: '#1f2937', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 125 }}>{item.name}</span>
+                      <span style={{ color: '#b45309', fontWeight: 700 }}>{item.daysOfCover}d</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 9.5, color: '#92400e', fontWeight: 600, borderTop: '1px dashed #fcd34d', paddingTop: 4 }}>
+                  ⚡ Action: Rebalance Inter-Plant Allocation
+                </div>
+              </div>
+
+              {/* Q4: Optimal Balance */}
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '9px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#15803d' }}>🟢 Optimal Buffer (35–60d)</span>
+                    <span style={{ fontSize: 10, background: '#dcfce7', color: '#166534', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                      {matrixQuadrants.healthy.items.length} SKUs
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 5 }}>
+                    Healthy Active Stock: <b style={{ color: '#15803d' }}>₹{matrixQuadrants.healthy.totalValue}L</b>
+                  </div>
+                  {matrixQuadrants.healthy.items.slice(0, 2).map((item) => (
+                    <div key={item.id} style={{ fontSize: 10.5, fontWeight: 600, color: '#1f2937', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 125 }}>{item.name}</span>
+                      <span style={{ color: '#15803d', fontWeight: 700 }}>{item.daysOfCover}d</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 9.5, color: '#166534', fontWeight: 600, borderTop: '1px dashed #86efac', paddingTop: 4 }}>
+                  ✓ Smooth Flow: Inbound Shipments on Schedule
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Footer Metrics */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, fontSize: 11, flexWrap: 'wrap', gap: 6, borderTop: '1px solid #f3f4f6', paddingTop: 8 }}>
+            <span style={{ color: '#ef4444', fontWeight: 600 }}>🔴 Critical: 6-Layer Main PCB (18d, ₹9.65L)</span>
+            <span style={{ color: '#10b981', fontWeight: 600 }}>🟢 Optimal: LPDDR5 Memory (44d, ₹90.2L)</span>
+            <span style={{ color: '#8b5cf6', fontWeight: 600 }}>🟣 Trapped: Mid-frame (115d, ₹57.04L)</span>
           </div>
         </div>
 
