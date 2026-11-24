@@ -1,5 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import {
+  renderArchitectureIcon,
+  renderProblemIcon,
+  IconPipelineHeader,
+  IconTargetProblems,
+} from '../components/ArchitectureIcons'
 
 // ─── Data Types & Definitions ──────────────────────────────────────────
 
@@ -931,11 +937,9 @@ export function Home() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 14,
-                  fontWeight: 800,
                 }}
               >
-                📊
+                <IconPipelineHeader size={18} />
               </div>
               <div>
                 <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 800, color: '#0F172A' }}>
@@ -1279,8 +1283,8 @@ export function Home() {
               marginBottom: 8,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ fontSize: 14 }}>🔥</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <IconTargetProblems size={16} />
               <h2 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
                 Problems Solved
               </h2>
@@ -1373,7 +1377,9 @@ export function Home() {
                     </div>
                   </div>
 
-                  <span style={{ fontSize: 12, flexShrink: 0 }}>{problem.icon}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: 16, height: 16 }}>
+                    {renderProblemIcon(problem.id, 14) || problem.icon}
+                  </span>
                 </div>
               )
             })}
@@ -1416,8 +1422,22 @@ export function Home() {
               paddingBottom: 10,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 18 }}>{selectedNode.icon}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: selectedNode.badgeBg || '#F1F5F9',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: `1px solid ${selectedNode.borderColor || '#E2E8F0'}`,
+                  flexShrink: 0,
+                }}
+              >
+                {renderArchitectureIcon(selectedNode.id, 20) || selectedNode.icon}
+              </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0F172A' }}>
                   {selectedNode.title}
@@ -1893,6 +1913,8 @@ function PipelineSubCard({
     ? node.title.replace(/^AGT-\d+:\s*/, '')
     : node.title
 
+  const customIcon = renderArchitectureIcon(node.id, compact ? 16 : 18)
+
   return (
     <div
       onClick={onSelect}
@@ -1915,11 +1937,22 @@ function PipelineSubCard({
             : 'none',
         display: 'flex',
         alignItems: 'center',
-        gap: compact ? 4 : 6,
+        gap: compact ? 6 : 8,
         transition: 'all 0.15s ease',
       }}
     >
-      <span style={{ fontSize: compact ? 12 : 14, flexShrink: 0 }}>{node.icon}</span>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: compact ? 18 : 20,
+          height: compact ? 18 : 20,
+          flexShrink: 0,
+        }}
+      >
+        {customIcon || node.icon}
+      </span>
       <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
         <div
           style={{
