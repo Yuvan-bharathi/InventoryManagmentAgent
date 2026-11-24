@@ -1,6 +1,7 @@
 """FastAPI REST routes for the Inventory Intelligence Engine & Digital Twin."""
 from __future__ import annotations
 
+import time
 from typing import Any
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -241,6 +242,9 @@ def simulate_scrap_change_endpoint(
 
 
 # 7. Digital Twin Consolidated Overview
+_TWIN_OVERVIEW_CACHE: dict[str, tuple[float, dict]] = {}
+_TWIN_CACHE_TTL = 45.0  # 45 seconds cache
+
 @router.get("/digital-twin/overview")
 def get_digital_twin_overview(
     plant_id: str | None = Query(None),
@@ -249,6 +253,11 @@ def get_digital_twin_overview(
 ):
     """Consolidated digital twin status across manufacturing plant zones and lines."""
     pid = plant_id if not u.plants or (plant_id in u.plants) else (u.plants[0] if u.plants else "IN-TN-01")
+    cache_key = f"{u.tenant_id}:{pid}"
+    now = time.time()
+    if cache_key in _TWIN_OVERVIEW_CACHE and (now - _TWIN_OVERVIEW_CACHE[cache_key][0]) < _TWIN_CACHE_TTL:
+        return {"data": _TWIN_OVERVIEW_CACHE[cache_key][1]}
+
     cap = calculate_production_capacity(s, tenant_id=u.tenant_id, plant_id=pid)
     forecast_30 = calculate_demand_forecast(s, tenant_id=u.tenant_id, horizon_days=30, plant_id=pid)
     suppliers = get_supplier_delivery_predictions(s, tenant_id=u.tenant_id, plant_id=pid)
@@ -303,17 +312,17 @@ def get_digital_twin_overview(
         },
     ]
 
-    return {
-        "data": {
-            "plant_id": pid,
-            "plant_name": "Chennai Manufacturing Complex" if "TN" in str(pid) else "Bengaluru Electronics Plant",
-            "zones": zones,
-            "production_capacity": cap,
-            "bottlenecks": cap["summary"]["bottlenecks"],
-            "critical_materials": [m_ for m_ in forecast_30 if m_["status"] == "CRITICAL"][:5],
-            "supplier_alerts": [p for p in suppliers if p["is_overdue"]][:5],
-        }
+    result = {
+        "plant_id": pid,
+        "plant_name": "Chennai Manufacturing Complex" if "TN" in str(pid) else "Bengaluru Electronics Plant",
+        "zones": zones,
+        "production_capacity": cap,
+        "bottlenecks": cap["summary"]["bottlenecks"],
+        "critical_materials": [m_ for m_ in forecast_30 if m_["status"] == "CRITICAL"][:5],
+        "supplier_alerts": [p for p in suppliers if p["is_overdue"]][:5],
     }
+    _TWIN_OVERVIEW_CACHE[cache_key] = (now, result)
+    return {"data": result}
 
 
 # 8. Module F: Quality Hold & Rejects

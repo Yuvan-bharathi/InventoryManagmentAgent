@@ -1,13 +1,14 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, qs } from '../api'
 import { inr, pct } from '../format'
 import { PageState } from '../kit'
 import { useShell } from '../shell-context'
-import { App as RetailTwinApp } from '../retail-twin/ui/App'
 import '../retail-twin/index.css'
+
+const RetailTwinApp = lazy(() => import('../retail-twin/ui/App').then((m) => ({ default: m.App })))
 
 export function DigitalTwin() {
   const { plant, setAgentCtx, openAgent } = useShell()
@@ -39,6 +40,7 @@ export function DigitalTwin() {
   const overviewQ = useQuery({
     queryKey: ['digital-twin-overview', plant],
     queryFn: () => api.get<any>('/api/digital-twin/overview' + qs({ plant_id: plant })),
+    staleTime: 60000,
   })
 
   // 2. Production Capacity & BOM
@@ -218,7 +220,7 @@ export function DigitalTwin() {
         </button>
       </div>
 
-      <PageState loading={overviewQ.isLoading || capacityQ.isLoading} error={overviewQ.error || capacityQ.error}>
+      <PageState loading={overviewQ.isLoading && !overviewQ.data} error={overviewQ.error}>
         {/* ========================================================================= */}
         {/* TAB 1: Plant Layout & Visual Telemetry                                   */}
         {/* ========================================================================= */}
@@ -286,7 +288,17 @@ export function DigitalTwin() {
                   transition: 'height 0.25s ease',
                 }}
               >
-                <RetailTwinApp embedded />
+                <Suspense
+                  fallback={
+                    <div style={{ height: '100%', minHeight: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0d14', color: '#94a3b8' }}>
+                      <div style={{ width: 36, height: 36, border: '3px solid #334155', borderTopColor: '#38bdf8', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                      <div style={{ marginTop: 14, fontWeight: 600, fontSize: 13, color: '#e2e8f0' }}>Initializing 3D Plant Model & Physics Telemetry...</div>
+                      <div style={{ marginTop: 4, fontSize: 11, color: '#64748b' }}>Accelerated WebGL Viewport</div>
+                    </div>
+                  }
+                >
+                  <RetailTwinApp embedded />
+                </Suspense>
               </div>
             </div>
 

@@ -45,6 +45,7 @@ def _csv_explode_bom(product_id: str | None = None) -> list[dict[str, Any]]:
             "material_category": minfo.get("material_category", "Component"),
             "uom": minfo.get("uom", "EA"),
             "standard_price_inr": float(minfo.get("standard_price_inr", 0.0)),
+            "safety_stock_qty": float(minfo.get("safety_stock_qty", 0.0) or 0.0),
             "component_qty": c_qty,
             "scrap_factor": scrap,
             "adjusted_qty_per_unit": round(c_qty * (1.0 + scrap), 4),
@@ -64,6 +65,7 @@ def explode_bom(s: Session, tenant_id: str, product_id: str | None = None) -> li
                 m.Material.material_category,
                 m.Material.uom,
                 m.Material.standard_price_inr,
+                m.Material.safety_stock_qty,
                 m.BomLine.component_qty,
                 m.BomLine.scrap_factor,
             )
@@ -88,6 +90,7 @@ def explode_bom(s: Session, tenant_id: str, product_id: str | None = None) -> li
                 "material_category": r.material_category,
                 "uom": r.uom,
                 "standard_price_inr": float(r.standard_price_inr),
+                "safety_stock_qty": float(r.safety_stock_qty or 0.0),
                 "component_qty": c_qty,
                 "scrap_factor": scrap,
                 "adjusted_qty_per_unit": round(adj_qty, 4),
@@ -174,13 +177,8 @@ def calculate_production_capacity(
             scrap = c["scrap_factor"] * scrap_multiplier
             req_per_unit = c["component_qty"] * (1.0 + scrap)
 
-            # Query or lookup safety stock
-            ss_qty = 0.0
-            try:
-                m_ss = s.execute(select(m.Material.safety_stock_qty).where((m.Material.material_id == mat_id) & (m.Material.tenant_id == tenant_id))).scalar()
-                ss_qty = float(m_ss or 0.0)
-            except Exception:
-                ss_qty = 0.0
+            # Direct safety stock lookup from pre-fetched BOM explosion
+            ss_qty = float(c.get("safety_stock_qty", 0.0) or 0.0)
 
             net_usable_after_ss = max(0.0, usable - ss_qty)
 
