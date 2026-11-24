@@ -134,6 +134,32 @@ export const ARCHITECTURE_NODES: Record<string, ArchitectureNode> = {
     ],
     primaryProblemId: 'prob-phantom',
   },
+  'src-excel': {
+    id: 'src-excel',
+    title: 'Excel & Manual Files',
+    shortCode: 'XLS',
+    subtitle: 'Uploads · BOM Overrides · Plans',
+    stageId: 'stage-1',
+    stageLabel: '1. DATA SOURCES',
+    stageNumber: 1,
+    badgeText: 'SPREADSHEET SOURCE · AD-HOC DATA & MANUAL UPLOADS',
+    badgeColor: '#16A34A',
+    badgeBg: '#DCFCE7',
+    borderColor: '#BBF7D0',
+    icon: '📊',
+    purpose:
+      'Departmental offline workbooks, manual BOM updates, supplier quotation sheets, and daily offline production planning templates uploaded by purchasing and store teams.',
+    protocols: 'Excel (.xlsx, .xls) · CSV · Drag-and-Drop Ingestion · Multipart File Uploads',
+    databaseTables:
+      'uploads, dq_result_rows, fact_production_order_plan, assumptions.json',
+    executionFlow: [
+      'Parses multi-tab Excel workbooks containing component BOM revisions and custom planning schedules.',
+      'Executes deterministic Data Quality (DQ) checks: null detection, duplicate key checks, and unit mapping.',
+      'Flags unlinked material SKUs, missing lead times, or invalid dates before staging into PostgreSQL.',
+      'Enables operational teams to inject scenario forecasts and manual production runs directly into the agent mesh.',
+    ],
+    primaryProblemId: 'prob-blindspots',
+  },
 
   // ── Stage 2: Ingestion & Data Layer ──
   'ing-fastapi': {
@@ -987,6 +1013,12 @@ export function Home() {
                   node={ARCHITECTURE_NODES['src-wms']}
                   isSelected={selectedNodeId === 'src-wms'}
                   onSelect={() => setSelectedNodeId('src-wms')}
+                  fillVertical
+                />
+                <PipelineSubCard
+                  node={ARCHITECTURE_NODES['src-excel']}
+                  isSelected={selectedNodeId === 'src-excel'}
+                  onSelect={() => setSelectedNodeId('src-excel')}
                   fillVertical
                 />
               </div>
